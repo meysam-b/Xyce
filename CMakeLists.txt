@@ -11,6 +11,8 @@ if(Xyce_USE_SUPERBUILD)
   return()
 endif()
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Set a default build type if none was specified (using the fact that
 # CMAKE_CONFIGURATION_TYPES is non-zero for mutli-configuration generators).
 #
