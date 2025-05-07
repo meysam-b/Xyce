@@ -244,6 +244,8 @@ public:
 
   void issueUnrecognizedParameterError(std::string const& parameterName);
 
+  void issueUnrecognizedParameterWarning(std::string const& parameterName);
+
 private:
   bool extractMutualInductanceData( const TokenVector & parsedInputLine );
 

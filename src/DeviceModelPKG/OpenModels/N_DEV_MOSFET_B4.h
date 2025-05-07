@@ -565,11 +565,6 @@ private:
   double xgw;
   double ngcon;
 
-  // added by Meysam Bahmanian on 06.05.2025
-  // for compatibility to tsmc65nm technolgy
-  // this is a dummy parameter!!!
-  double mulu0;
-
   bool XGWgiven;
   bool NGCONgiven;
 

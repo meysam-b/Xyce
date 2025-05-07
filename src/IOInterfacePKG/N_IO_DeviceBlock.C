@@ -729,7 +729,16 @@ bool DeviceBlock::extractBasicDeviceData( const TokenVector & parsedInputLine , 
          // Either the device does not have an area parameter, or there is
          // some unrecognized parameter on the line. Either way, flag an error
          // on the line and stop.
-         issueUnrecognizedParameterError(field);
+         // 
+         // additional comments from Meysam Bahmanian
+         // added on 07.05.2025
+         // The function changed from
+         //     issueUnrecognizedParameterError(field)
+         // to
+         //     issueUnrecognizedParameterWarning(field)
+         // passing an extra parameter to the model is simply ignored and does
+         // not cause the program to crash. 
+         issueUnrecognizedParameterWarning(field);
       }
     }
   }
@@ -804,9 +813,13 @@ bool DeviceBlock::extractBasicDeviceData( const TokenVector & parsedInputLine , 
   }
 
   // Issue fatal error if there are more fields left on the line.
+  //additional comments from Meysam Bahmanian
+  // added on 07.05.2025
+  // The function changed from Report::UserError() to Report::UserWarning()
+
   if ( linePosition < numFields )
   {
-    Report::UserError().at(getNetlistFilename(), parsedInputLine[linePosition].lineNumber_)
+    Report::UserWarning().at(getNetlistFilename(), parsedInputLine[linePosition].lineNumber_)
       << "Unrecognized fields for device " << getInstanceName();
     return false;
   }
@@ -2290,6 +2303,22 @@ void DeviceBlock::issueUnrecognizedParameterError(
    std::string const& parameterName)
 {
   Report::UserError().at(getNetlistFilename(), getLineNumber())
+    << "Unrecognized parameter " << parameterName << " for device " << getInstanceName();
+}
+
+//-----------------------------------------------------------------------------
+// Function      : DeviceBlock::issueUnrecognizedParameterWarning
+// Purpose       : Use the Xyce warning manager to issue a warning message to
+//                 the user 
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 07/05/2025
+//-----------------------------------------------------------------------------
+void DeviceBlock::issueUnrecognizedParameterWarning(
+   std::string const& parameterName)
+{
+  Report::UserWarning().at(getNetlistFilename(), getLineNumber())
     << "Unrecognized parameter " << parameterName << " for device " << getInstanceName();
 }
 

@@ -234,14 +234,6 @@ void Traits::loadInstanceParameters(ParametricData<MOSFET_B4::Instance> &p)
      .setCategory(CAT_NONE)
      .setDescription("Body resistance");
 
-  // added by Meysam Bahmanian on 06.05.2025
-  // for compatibility to tsmc65nm technolgy
-  // this is a dummy parameter!!!
-    p.addPar ("MULU0",0.0,&MOSFET_B4::Instance::mulu0)
-     .setUnit(U_VOLT)
-     .setCategory(CAT_BASIC)
-     .setDescription("TBD");
-
     p.addPar ("DELVTO",0.0,&MOSFET_B4::Instance::delvto)
      .setUnit(U_VOLT)
      .setCategory(CAT_BASIC)
