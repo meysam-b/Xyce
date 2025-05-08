@@ -11,14 +11,14 @@ all : $(TARGET).pdf
 	latexmk -pdf $<
 
 clean:
-	latexmk -c -bibtex
+	latexmk -c -bibtex && rm $(TARGET)_SANDoutside.tex
 
 realclean:
-	latexmk -C -pdf -bibtex
+	latexmk -C -pdf -bibtex && rm $(TARGET)_SANDoutside.tex
 
-outside: $(TARGET)_SANDoutside.pdf
+public-release: $(TARGET)_SANDoutside.pdf
 $(TARGET)_SANDoutside.pdf: $(TARGET)_SANDoutside.tex
-	latexmk -f -pdf $(TARGET)_SANDoutside.tex
+	latexmk -f -pdf $(TARGET)_SANDoutside.tex -jobname=$(TARGET)
 
 
 remove-style: $(TARGET)_SANDoutside.tex
