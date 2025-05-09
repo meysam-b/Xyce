@@ -231,8 +231,10 @@ NOISE::NOISE(
     bNoiseVecImagPtr(linearSystem_.builder().createVector()),
     hackOutputCalledBefore_(false),
     outputNodeSingle_(true),
-    outputNode1_(""),
-    outputNode2_(""),
+    // outputNode1/2 are now empty vectors to support multiple output nodes
+    // and do not need to be initialized
+    // outputNode1_(""),
+    // outputNode2_(""),
     specifiedSource_(""),
     noiseLoopSize_(0),
     stepFlag_(false),
@@ -423,6 +425,11 @@ bool NOISE::setAnalysisParams(const Util::OptionBlock & paramsBlock)
     noiseSweepVector_.push_back(parseSweepParams(paramsBlock.begin(), paramsBlock.end()));
   }
 
+  outputNodeSingle_.clear();
+  outputNode1_.clear();
+  outputNode2_.clear();
+  specifiedSource_.clear();
+
   for (Util::ParamList::const_iterator it = paramsBlock.begin(),
       end = paramsBlock.end(); it != end; ++it)
   {
@@ -430,19 +437,24 @@ bool NOISE::setAnalysisParams(const Util::OptionBlock & paramsBlock)
     {
       if ((*it).getImmutableValue<double>()==1.0)
       {
-        outputNodeSingle_ = true;
+        // outputNodeSingle_ = true;
+        outputNodeSingle_.push_back(true);
         Util::ParamList::const_iterator itNode = it;
         itNode++;
-        outputNode1_ = (*itNode).uTag();
+        // outputNode1_ = (*itNode).uTag();
+        outputNode1_.push_back( (*itNode).uTag() );
       }
       else if ((*it).getImmutableValue<double>()==2.0)
       {
-        outputNodeSingle_ = false;
+        // outputNodeSingle_ = false;
+        outputNodeSingle_.push_back(false);
         Util::ParamList::const_iterator itNode = it;
         itNode++;
-        outputNode1_ = (*itNode).uTag();
+        // outputNode1_ = (*itNode).uTag();
+        outputNode1_.push_back( (*itNode).uTag() );
         itNode++;
-        outputNode2_ = (*itNode).uTag();
+        // outputNode2_ = (*itNode).uTag();
+        outputNode2_.push_back( (*itNode).uTag() );
       }
     }
     else if ((*it).uTag() == "SOURCE")
@@ -487,21 +499,39 @@ bool NOISE::setAnalysisParams(const Util::OptionBlock & paramsBlock)
            << "NOISE simulation parameters"
            << std::endl;
 
-    if (outputNodeSingle_)
-    {
-      dout() << "Output Node: V(" << outputNode1_ << ")" <<std::endl;
-    }
-    else
-    {
-      dout() << "Output Node: V(" << outputNode1_ << ","<<outputNode2_<<")" <<std::endl;
-    }
+    // if (outputNodeSingle_)
+    // {
+    //   dout() << "Output Node: V(" << outputNode1_ << ")" <<std::endl;
+    // }
+    // else
+    // {
+    //   dout() << "Output Node: V(" << outputNode1_ << ","<<outputNode2_<<")" <<std::endl;
+    // }
 
-    dout() << "specified source = " << specifiedSource_ << std::endl
-           << "number of points  = " << np_ << std::endl
-           << "starting frequency = " << fStart_ << std::endl
-           << "stop frequency = " << fStop_ << std::endl
-           << "pts_per_summary = " << pts_per_summary_
-             << std::endl;
+    // dout() << "specified source = " << specifiedSource_ << std::endl
+    //        << "number of points  = " << np_ << std::endl
+    //        << "starting frequency = " << fStart_ << std::endl
+    //        << "stop frequency = " << fStop_ << std::endl
+    //        << "pts_per_summary = " << pts_per_summary_
+    //          << std::endl;
+    size_t ioSize = outputNodeSingle_.size();
+    for (size_t ioIt=0; ioIt<ioSize; ++ioIt)
+    {
+      if (outputNodeSingle_[ioIt])
+      {
+        dout() << "Output Node: V(" << outputNode1_[ioSize] << ")" <<std::endl;
+      }
+      else
+      {
+        dout() << "Output Node: V(" << outputNode1_[ioSize] << ","<<outputNode2_[ioSize]<<")" <<std::endl;
+      }
+      dout() << "specified source = " << specifiedSource_[ioIt] << std::endl
+            << "number of points  = " << np_ << std::endl
+            << "starting frequency = " << fStart_ << std::endl
+            << "stop frequency = " << fStop_ << std::endl
+            << "pts_per_summary = " << pts_per_summary_
+              << std::endl;
+    }
   }
 
   // error checking of parameters, when DATA=<name> is not used
@@ -776,12 +806,12 @@ bool NOISE::doLoopProcess()
 
     //comm.barrier();
     int root=-1;
-    if (outputVarGIDs_.size()>0)
+    if (outputVarGIDs1_.size()>0)
     {
-      if (outputVarGIDs_[0] > -1)
+      if (outputVarGIDs1_[0] > -1)
       {
-        v1r = Xreal.getElementByGlobalIndex(outputVarGIDs_[0]);
-        v1i = Ximag.getElementByGlobalIndex(outputVarGIDs_[0]);
+        v1r = Xreal.getElementByGlobalIndex(outputVarGIDs1_[0]);
+        v1i = Ximag.getElementByGlobalIndex(outputVarGIDs1_[0]);
         root = myPID;
       }
       Xyce::Parallel::AllReduce(comm.comm(), MPI_MAX, &root, 1);
@@ -790,12 +820,12 @@ bool NOISE::doLoopProcess()
     }
 
     root=-1;
-    if (outputVarGIDs_.size()>1)
+    if (outputVarGIDs2_.size()>1)
     {
-      if (outputVarGIDs_[1] > -1)
+      if (outputVarGIDs2_[0] > -1)
       {
-        v2r = Xreal.getElementByGlobalIndex(outputVarGIDs_[1]);
-        v2i = Ximag.getElementByGlobalIndex(outputVarGIDs_[1]);
+        v2r = Xreal.getElementByGlobalIndex(outputVarGIDs2_[0]);
+        v2i = Ximag.getElementByGlobalIndex(outputVarGIDs2_[0]);
         root = myPID;
       }
       Xyce::Parallel::AllReduce(comm.comm(), MPI_MAX, &root, 1);
@@ -1169,56 +1199,105 @@ bool NOISE::solveACLinearSystem_()
 void NOISE::processOutputNodes ()
 {
   // setup the names:
-  outputVarNames_.clear();
-  outputVarNames_.push_back(outputNode1_);
-  if (!outputNodeSingle_)
+  // outputVarNames_.clear();
+  outputVarNames1_.clear();
+  outputVarNames2_.clear();
+  // outputVarNames_.push_back(outputNode1_);
+  size_t ioSize = outputNodeSingle_.size();
+  // iterate over the output nodes, and set up the names.
+  for (size_t ioIt=0; ioIt<ioSize; ++ioIt)
   {
-    outputVarNames_.push_back(outputNode2_);
+    outputVarNames1_.push_back(outputNode1_[ioIt]);
+    if (!outputNodeSingle_[ioIt])
+    {
+      outputVarNames2_.push_back(outputNode2_[ioIt]);
+    } else
+    {
+      outputVarNames2_.push_back("");
+    }
   }
-  int numOutVars = outputVarNames_.size();
+  // int numOutVars = outputVarNames_.size();
 
   // set up the gid's:
-  int found(0);
-  int found2(0);
-  bool foundLocal(false);
-  bool foundLocal2(false);
+  // variable names V/D coresspond to Voltage/Device(current) nodes
+  int foundV(0);
+  int foundD(0);
+  bool foundLocalV(false);
+  bool foundLocalD(false);
 
   Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
   Parallel::Communicator &comm = *(pds_manager.getPDSComm());
 
-  outputVarGIDs_.resize( numOutVars, -1 );
-  for (int iout = 0; iout < numOutVars; ++iout)
+  outputVarGIDs1_.resize( ioSize, -1 );
+  outputVarGIDs2_.resize( ioSize, -1 );
+  for (int iout = 0; iout < ioSize; ++iout)
   {
-    std::vector<int> svGIDList1, dummyList;
-    char type1;
-    foundLocal = topology_.getNodeSVarGIDs(NodeID(outputVarNames_[iout], Xyce::_VNODE),
-        svGIDList1, dummyList, type1);
-
-    found = static_cast<int>(foundLocal);
-    Xyce::Parallel::AllReduce(comm.comm(), MPI_LOR, &found, 1);
-
-    foundLocal2 = false;
-    if (!found)// if looking for this as a voltage node failed, try a "device" (i.e. current) node.
-    {
-      foundLocal2 = topology_.getNodeSVarGIDs(NodeID(outputVarNames_[iout], Xyce::_DNODE),
+    { // single node case
+      std::vector<int> svGIDList1, dummyList;
+      char type1;
+      foundLocalV = topology_.getNodeSVarGIDs(NodeID(outputVarNames1_[iout], Xyce::_VNODE),
           svGIDList1, dummyList, type1);
-    }
-    found2 = static_cast<int>(foundLocal2);
-    Xyce::Parallel::AllReduce(comm.comm(), MPI_LOR, &found2, 1);
 
-    if (!found && !found2)
-    {
-      Report::UserError() << "Output function variable " << outputVarNames_[iout] << " not found";
-    }
+      foundV = static_cast<int>(foundLocalV);
+      Xyce::Parallel::AllReduce(comm.comm(), MPI_LOR, &foundV, 1);
 
-    if (found || found2)
-    {
-      int tmpGID=-1;
-      if(svGIDList1.size()==1)
+      foundLocalD = false;
+      if (!foundV)// if looking for this as a voltage node failed, try a "device" (i.e. current) node.
       {
-        tmpGID = svGIDList1.front();
+        foundLocalD = topology_.getNodeSVarGIDs(NodeID(outputVarNames1_[iout], Xyce::_DNODE),
+            svGIDList1, dummyList, type1);
       }
-      outputVarGIDs_[iout] = tmpGID;
+      foundD = static_cast<int>(foundLocalD);
+      Xyce::Parallel::AllReduce(comm.comm(), MPI_LOR, &foundD, 1);
+
+      if (!foundV && !foundD)
+      {
+        Report::UserError() << "Output function variable " << outputVarNames1_[iout] << " not found";
+      }
+
+      if (foundV || foundD)
+      {
+        int tmpGID=-1;
+        if(svGIDList1.size()==1)
+        {
+          tmpGID = svGIDList1.front();
+        }
+        outputVarGIDs1_[iout] = tmpGID;
+      }
+    }
+    if (!outputNodeSingle_[iout])// two nodes case
+    {
+      std::vector<int> svGIDList1, dummyList;
+      char type1;
+      foundLocalV = topology_.getNodeSVarGIDs(NodeID(outputVarNames2_[iout], Xyce::_VNODE),
+          svGIDList1, dummyList, type1);
+
+      foundV = static_cast<int>(foundLocalV);
+      Xyce::Parallel::AllReduce(comm.comm(), MPI_LOR, &foundV, 1);
+
+      foundLocalD = false;
+      if (!foundV)// if looking for this as a voltage node failed, try a "device" (i.e. current) node.
+      {
+        foundLocalD = topology_.getNodeSVarGIDs(NodeID(outputVarNames2_[iout], Xyce::_DNODE),
+            svGIDList1, dummyList, type1);
+      }
+      foundD = static_cast<int>(foundLocalD);
+      Xyce::Parallel::AllReduce(comm.comm(), MPI_LOR, &foundD, 1);
+
+      if (!foundV && !foundD)
+      {
+        Report::UserError() << "Output function variable " << outputVarNames2_[iout] << " not found";
+      }
+
+      if (foundV || foundD)
+      {
+        int tmpGID=-1;
+        if(svGIDList1.size()==1)
+        {
+          tmpGID = svGIDList1.front();
+        }
+        outputVarGIDs2_[iout] = tmpGID;
+      }
     }
   }
 }
@@ -1252,18 +1331,28 @@ void NOISE::setupAdjointRHS_()
   bNoiseVecRealPtr->putScalar(0.0);
   bNoiseVecImagPtr->putScalar(0.0);
 
-  int numOutVars = outputVarNames_.size();
+  int numOutVars = outputNodeSingle_.size();
   for (int iout=0;iout<numOutVars;++iout)
   {
-    int tmpGID=outputVarGIDs_[iout];
+    int tmpGID;
+    // single node case
+    tmpGID=outputVarGIDs1_[iout];
     if (tmpGID > -1)
     {
       double val=1.0;
-      if (iout>0) val=-1.0;
       bNoiseVecRealPtr->setElementByGlobalIndex( tmpGID, val, 0);
     }
+    if (!outputNodeSingle_[iout])              // two nodes case
+    {
+      tmpGID=outputVarGIDs2_[iout];
+      if (tmpGID > -1)
+      {
+        double val=-1.0;
+        bNoiseVecRealPtr->setElementByGlobalIndex( tmpGID, val, 0);
+      }
+    }
+    bNoiseVecRealPtr->fillComplete();
   }
-  bNoiseVecRealPtr->fillComplete();
 }
 
 //-----------------------------------------------------------------------------
@@ -1420,13 +1509,13 @@ void NOISE::hackTecplotOutput()
   {
     // header output
     output_stream << "TITLE=\"noise output\"\tVARIABLES=\"frequency\" "<<std::endl;
-    output_stream << "\t\"Re(V(" << outputNode1_ << "))\""<<std::endl;
-    output_stream << "\t\"Im(V(" << outputNode1_ << "))\""<<std::endl;
+    output_stream << "\t\"Re(V(" << outputNode1_[0] << "))\""<<std::endl;
+    output_stream << "\t\"Im(V(" << outputNode1_[0] << "))\""<<std::endl;
 
-    if(!outputNodeSingle_)
+    if(!outputNodeSingle_[0])
     {
-      output_stream << "\t\"Re(V(" << outputNode2_ << "))\""<<std::endl;
-      output_stream << "\t\"Im(V(" << outputNode2_ << "))\""<<std::endl;
+      output_stream << "\t\"Re(V(" << outputNode2_[0] << "))\""<<std::endl;
+      output_stream << "\t\"Im(V(" << outputNode2_[0] << "))\""<<std::endl;
     }
     output_stream << "\t\"onoise_spectrum \""<<std::endl;
     output_stream << "\t\"inoise_spectrum \""<<std::endl;
@@ -1486,17 +1575,17 @@ void NOISE::hackTecplotOutput()
   // output the AC solution for the output node(s) (for double checking)
   Linear::Vector & Xreal = saved_AC_X_->block( 0 );
   Linear::Vector & Ximag = saved_AC_X_->block( 1 );
-  double v1r = Xreal.getElementByGlobalIndex(outputVarGIDs_[0]);
-  double v1i = Ximag.getElementByGlobalIndex(outputVarGIDs_[0]);
+  double v1r = Xreal.getElementByGlobalIndex(outputVarGIDs1_[0]);
+  double v1i = Ximag.getElementByGlobalIndex(outputVarGIDs1_[0]);
 
   output_stream << currentFreq_ << "\t" << v1r << "\t" << v1i;
 
-  if(!outputNodeSingle_)
+  if(!outputNodeSingle_[0])
   {
     double v2r = 0.0;
     double v2i = 0.0;
-    v2r = Xreal.getElementByGlobalIndex(outputVarGIDs_[1]);
-    v2i = Ximag.getElementByGlobalIndex(outputVarGIDs_[1]);
+    v2r = Xreal.getElementByGlobalIndex(outputVarGIDs2_[0]);
+    v2i = Ximag.getElementByGlobalIndex(outputVarGIDs2_[0]);
     output_stream << "\t" << v2r << "\t" << v2i;
   }
 

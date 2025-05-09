@@ -170,9 +170,18 @@ private:
   Linear::Vector * bNoiseVecImagPtr;
 
   bool hackOutputCalledBefore_;
-  bool outputNodeSingle_;
-  std::string outputNode1_;
-  std::string outputNode2_;
+
+  // modified by Meysam Bahmanian
+  // on 05/08/2025
+  // to support multiple input+output nodes
+  // bool outputNodeSingle_;
+  // std::string outputNode1_;
+  // std::string outputNode2_;
+  std::vector<bool> outputNodeSingle_;
+  std::vector<std::string> outputNode1_;
+  std::vector<std::string> outputNode2_;
+  // only a signle source is supported
+  // support for multiple sources is not implemented
   std::string specifiedSource_;
   int noiseLoopSize_;
 
@@ -225,8 +234,20 @@ private:
   std::map< std::string, std::vector<std::string> > dataNamesMap_;
   std::map< std::string, std::vector< std::vector<double> > > dataTablesMap_;
 
-  std::vector<std::string> outputVarNames_;
-  std::vector<int>    outputVarGIDs_;
+  // modified by Meysam Bahmanian
+  // on 05/08/2025
+  // previous definition of outputVarNames_ has a maximum size of 2 
+  // and contained 1/2 node names. 
+  // std::vector<std::string> outputVarNames_;
+  // To support multiple Vout/SRC nodes, we introduce two vectors
+  // one for 1 nodes and the other for 2 nodes
+  // We avoid PLUS/MINUS and stick to 1/2 convention as the nodes can 
+  // also be currents
+  std::vector<std::string> outputVarNames1_;
+  std::vector<std::string> outputVarNames2_;
+
+  std::vector<int>    outputVarGIDs1_;
+  std::vector<int>    outputVarGIDs2_;
 
   std::vector<Xyce::Analysis::NoiseData*> noiseDataVec_;
   Teuchos::SerialDenseMatrix<int, std::complex<double> > Sparams_;
