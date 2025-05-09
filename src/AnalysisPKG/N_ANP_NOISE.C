@@ -436,6 +436,7 @@ bool NOISE::setAnalysisParams(const Util::OptionBlock & paramsBlock)
     if ((*it).uTag() == "V")
     {
       if ((*it).getImmutableValue<double>()==1.0)
+      // always store outputNode1_
       {
         // outputNodeSingle_ = true;
         outputNodeSingle_.push_back(true);
@@ -443,8 +444,9 @@ bool NOISE::setAnalysisParams(const Util::OptionBlock & paramsBlock)
         itNode++;
         // outputNode1_ = (*itNode).uTag();
         outputNode1_.push_back( (*itNode).uTag() );
+        outputNode2_.push_back("");
       }
-      else if ((*it).getImmutableValue<double>()==2.0)
+      if ((*it).getImmutableValue<double>()==2.0)
       {
         // outputNodeSingle_ = false;
         outputNodeSingle_.push_back(false);
@@ -2156,6 +2158,23 @@ bool extractNOISEData(
     return false;
   }
 
+  // find the position of the last output node
+  int lastOut = 0;
+  pos1=1;
+  while ( pos1 < numFields )
+  {
+    ExtendedString stringVal ( parsed_line[pos1].string_ );
+    stringVal.toUpper ();
+
+    if (stringVal == "DATA" || stringVal == "LIN" || stringVal == "OCT" || stringVal == "DEC")
+    {
+      lastOut = pos1-2;
+      break;
+    }
+    ++pos1;
+  }
+
+
   int linePosition = 1;   // Start of parameters on .param line.
 
   Util::Param parameter("", "");
@@ -2164,56 +2183,74 @@ bool extractNOISEData(
   ExtendedString stringVal("");
   std::ostringstream msg;
   int p_err=0;
-  if( parsed_line[linePosition].string_ == "V" || parsed_line[linePosition].string_ == "v")
+  while (linePosition <= lastOut)
   {
-    if( parsed_line[linePosition+3].string_ == ")" )
+    if( parsed_line[linePosition].string_ == "V" || parsed_line[linePosition].string_ == "v")
     {
-      stringVal = parsed_line[linePosition].string_;
-      stringVal.toUpper();
-      parameter.setTag(stringVal);
-      parameter.setVal( 1.0 );
-      option_block.addParam( parameter );
+      if( parsed_line[linePosition+3].string_ == ")" )
+      // single-ended output node case
+      {
+        // V properties
+        stringVal = parsed_line[linePosition].string_;
+        stringVal.toUpper();
+        parameter.setTag(stringVal);
+        parameter.setVal( 1.0 );
+        option_block.addParam( parameter );
 
-      stringVal = parsed_line[linePosition+2].string_;
-      stringVal.toUpper();
-      parameter.setTag( stringVal );
-      parameter.setVal( 0.0 );
-      option_block.addParam( parameter );
+        // single outputNode properties
+        stringVal = parsed_line[linePosition+2].string_;
+        stringVal.toUpper();
+        parameter.setTag( stringVal );
+        parameter.setVal( 0.0 );
+        option_block.addParam( parameter );
 
-      linePosition += 4;
-    }
-    else if( parsed_line[linePosition+5].string_ == ")" )
-    {
-      stringVal = parsed_line[linePosition].string_;
-      stringVal.toUpper();
-      parameter.setTag(stringVal);
-      parameter.setVal( 2.0 );
-      option_block.addParam( parameter );
+        // check if the next token is for multiple output nodes
+        if (parsed_line[linePosition+4].string_ == ",")
+        {
+          linePosition += 5;
+        } else {
+          linePosition += 4;
+        }
+      }
+      else if( parsed_line[linePosition+5].string_ == ")" )
+      // differential output node case
+      {
+        stringVal = parsed_line[linePosition].string_;
+        stringVal.toUpper();
+        parameter.setTag(stringVal);
+        parameter.setVal( 2.0 );
+        option_block.addParam( parameter );
 
-      stringVal = parsed_line[linePosition+2].string_;
-      stringVal.toUpper();
-      parameter.setTag( stringVal );
-      parameter.setVal( 0.0 );
-      option_block.addParam( parameter );
+        stringVal = parsed_line[linePosition+2].string_;
+        stringVal.toUpper();
+        parameter.setTag( stringVal );
+        parameter.setVal( 0.0 );
+        option_block.addParam( parameter );
 
-      stringVal = parsed_line[linePosition+4].string_;
-      stringVal.toUpper();
-      parameter.setTag( stringVal );
-      parameter.setVal( 0.0 );
-      option_block.addParam( parameter );
+        stringVal = parsed_line[linePosition+4].string_;
+        stringVal.toUpper();
+        parameter.setTag( stringVal );
+        parameter.setVal( 0.0 );
+        option_block.addParam( parameter );
 
-      linePosition += 6;
+        if (parsed_line[linePosition+6].string_ == ",")
+        {
+          linePosition += 7;
+        } else {
+          linePosition += 6;
+        }
+      }
+      else
+      {
+        msg << "Unrecognized parenthetical specification for NOISE output ";
+        p_err = linePosition;
+      }
     }
     else
     {
-      msg << "Unrecognized parenthetical specification for NOISE output ";
+      msg << "Incorrect format for NOISE output.";
       p_err = linePosition;
     }
-  }
-  else
-  {
-    msg << "Incorrect format for NOISE output.";
-    p_err = linePosition;
   }
 
   // source is required
