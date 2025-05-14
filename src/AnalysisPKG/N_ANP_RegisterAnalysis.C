@@ -36,6 +36,7 @@
 #include <N_ANP_AC.h>
 #include <N_ANP_DCSweep.h>
 #include <N_ANP_HB.h>
+#include <N_ANP_HBNOISE.h>
 #include <N_ANP_MOR.h>
 #include <N_ANP_MPDE.h>
 #include <N_ANP_NOISE.h>
@@ -85,6 +86,7 @@ void registerAnalysisFactory(
   registerHBFactory(factory_block);
   registerMPDEFactory(factory_block);
   registerNOISEFactory(factory_block);
+  registerHBNOISEFactory(factory_block);
   registerMORFactory(factory_block);
   registerStepFactory(factory_block);
   registerSamplingFactory(factory_block);

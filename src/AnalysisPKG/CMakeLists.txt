@@ -12,6 +12,7 @@ target_sources(XyceLib PRIVATE
       N_ANP_EmbeddedSampling.C
       N_ANP_PCE.C
       N_ANP_HB.C
+      N_ANP_HBNOISE.C
       N_ANP_InnerLevelSolve.C
       N_ANP_MOR.C
       N_ANP_MPDE.C

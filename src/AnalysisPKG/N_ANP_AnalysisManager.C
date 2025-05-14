@@ -109,7 +109,7 @@ const char *
 analysisModeName(
   Mode          mode) 
 {
-  static const char * const mode_names[] = {"Invalid", "DC OP", "DC Sweep", "DC NL Poisson", "Transient", "MPDE", "HB", "AC", "NOISE", "MOR", "ROL"};
+  static const char * const mode_names[] = {"Invalid", "DC OP", "DC Sweep", "DC NL Poisson", "Transient", "MPDE", "HB", "HBNOISE", "AC", "NOISE", "MOR", "ROL"};
 
   if (mode < sizeof(mode_names)/sizeof(mode_names[0]))
     return mode_names[mode];

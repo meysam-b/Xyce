@@ -53,6 +53,7 @@ enum Mode
   ANP_MODE_TRANSIENT,
   ANP_MODE_MPDE,
   ANP_MODE_HB,
+  ANP_MODE_HBNOISE,
   ANP_MODE_AC,
   ANP_MODE_NOISE,
   ANP_MODE_MOR,
@@ -77,6 +78,7 @@ class HB;
 class MOR;
 class MPDE;
 class NOISE;
+class HBNOISE;
 class NoiseData;
 class OutputAdapter;
 class OutputMgrAdapter;

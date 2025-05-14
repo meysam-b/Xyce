@@ -1,0 +1,120 @@
+//-------------------------------------------------------------------------
+//   Copyright (c) 2025 Meysam Bahmanian
+//   Heinz Nixdorf Institute, University of Paderborn, Germany
+//
+//   This file is part of the Xyce(TM) Parallel Electrical Simulator.
+//
+//   Xyce(TM) is free software: you can redistribute it and/or modify
+//   it under the terms of the GNU General Public License as published by
+//   the Free Software Foundation, either version 3 of the License, or
+//   (at your option) any later version.
+//
+//   Xyce(TM) is distributed in the hope that it will be useful,
+//   but WITHOUT ANY WARRANTY; without even the implied warranty of
+//   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//   GNU General Public License for more details.
+//
+//   You should have received a copy of the GNU General Public License
+//   along with Xyce(TM).
+//   If not, see <http://www.gnu.org/licenses/>.
+//-------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Purpose       : This is the Harmonic Balance Noise Analysis class
+// Special Notes :
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/13/2025
+//-----------------------------------------------------------------------------
+
+#ifndef Xyce_N_ANP_HBNOISE_h
+#define Xyce_N_ANP_HBNOISE_h
+
+#include <vector>
+
+#include <Teuchos_SerialDenseMatrix.hpp>
+#include <Teuchos_RCP.hpp>
+
+#include <N_ANP_fwd.h>
+#include <N_LOA_fwd.h>
+#include <N_LAS_fwd.h>
+#include <N_TOP_fwd.h>
+
+#include <N_ANP_AnalysisBase.h>
+#include <N_ANP_StepEvent.h>
+#include <N_ANP_RegisterAnalysis.h>
+#include <N_UTL_DFTInterfaceDecl.hpp>
+#include <N_UTL_FFTInterface.hpp>
+#include <N_UTL_Listener.h>
+#include <N_UTL_OptionBlock.h>
+
+namespace Xyce {
+namespace Analysis {
+
+class HBNOISE : public AnalysisBase, public Util::ListenerAutoSubscribe<StepEvent>
+{
+public:
+  HBNOISE(
+    AnalysisManager &analysis_manager,
+    Linear::System & linear_system,
+    Nonlinear::Manager & nonlinear_manager,
+    Loader::Loader &loader,
+    Device::DeviceMgr & device_manager,
+    Linear::Builder & builder,
+    Topo::Topology & topology,
+    IO::InitialConditionsManager & initial_conditions_manager,
+    IO::RestartMgr & restart_manager);
+
+  virtual ~HBNOISE();
+
+  void notify(const StepEvent &event);
+
+  // Existing virtual functions
+  virtual bool processSuccessfulDCOP();
+  virtual bool processFailedDCOP();
+  virtual void finalExpressionBasedSetup();
+  virtual TimeIntg::TIAParams &getTIAParams();
+  virtual const TimeIntg::TIAParams &getTIAParams() const;
+  virtual bool doRun();
+  virtual bool getDCOPFlag() const;
+
+  // Add parameter setting methods
+  bool setAnalysisParams(const Util::OptionBlock & option_block);
+  bool setLinSol(const Util::OptionBlock & option_block);
+
+protected:
+  virtual bool doInit();
+  virtual bool doLoopProcess();
+  virtual bool doProcessSuccessfulStep();
+  virtual bool doProcessFailedStep();
+  virtual bool doFinish();
+  virtual bool doHandlePredictor();
+
+private:
+  // Member variables similar to HB
+  AnalysisManager &                     analysisManager_;
+  Loader::Loader &                      loader_;
+  Linear::System &                      linearSystem_;
+  Nonlinear::Manager &                  nonlinearManager_;
+  Device::DeviceMgr &                   deviceManager_;
+  Linear::Builder &                     builder_;
+  Topo::Topology &                      topology_;
+  IO::InitialConditionsManager &        initialConditionsManager_;
+  IO::RestartMgr &                      restartManager_;
+  Parallel::Manager *                   pdsMgrPtr_;
+
+  // HBNOISE specific parameters
+  double fOffsetStart_;        // Start offset frequency for noise analysis
+  double fOffsetStop_;        // Stop offset frequency for noise analysis
+  std::string outputNode_;    // Output node for noise analysis
+
+  // Option blocks for parameters
+  Util::OptionBlock saved_lsOB_;
+  Util::OptionBlock saved_timeIntOB_;
+};
+
+bool registerHBNOISEFactory(FactoryBlock &factory_block);
+
+} // namespace Analysis
+} // namespace Xyce
+
+#endif // Xyce_N_ANP_HBNOISE_h 
