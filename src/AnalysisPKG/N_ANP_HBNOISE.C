@@ -87,6 +87,19 @@ namespace Xyce {
 namespace Analysis {
 
 //-----------------------------------------------------------------------------
+// Function      : HBNOISE::convertDataToSweepParams
+// Purpose       :
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/14/2025
+//-----------------------------------------------------------------------------
+bool HBNOISE::convertDataToSweepParams()
+{
+  return convertData(hbnoiseSweepVector_, dataNamesMap_, dataTablesMap_);
+}
+
+//-----------------------------------------------------------------------------
 // Function      : HBNOISE::HBNOISE
 // Purpose       : Constructor
 // Special Notes :
@@ -125,7 +138,11 @@ HBNOISE::HBNOISE(
     fOffsetStart_(1.0),
     fOffsetStop_(1.0),
     pts_per_summary_(0),
-    dataSpecification_(false)
+    dataSpecification_(false),
+    hbnoiseLoopSize_(0),
+    stepMult_(0.0),
+    fstep_(0.0),
+    calcNoiseIntegrals_(true)
 {
   pdsMgrPtr_ = analysisManager_.getPDSManager();
 }
@@ -168,7 +185,63 @@ void HBNOISE::notify(const StepEvent &event)
 //-----------------------------------------------------------------------------
 bool HBNOISE::doInit()
 {
-  return true;
+  bool bsuccess = true;
+
+  // check if the "DATA" specification was used.  If so, create a new vector of
+  // SweepParams, in the "TABLE" style.
+  if (dataSpecification_)
+  {
+    if (!convertDataToSweepParams())
+    {
+      Report::UserFatal() << "Invalid data=<name> parameter on .HBNOISE line.";
+      return false;
+    }
+
+    std::vector<SweepParam>::iterator begin = hbnoiseSweepVector_.begin();
+    std::vector<SweepParam>::iterator end = hbnoiseSweepVector_.end();
+    std::vector<SweepParam>::iterator it = begin;
+    for ( ; it != end; ++it)
+    {
+      SweepParam &sweep_param = (*it);
+      std::string name = (*it).name; Util::toUpper(name);
+      if (name == "FREQ" || name == "HERTZ")
+      {
+        // used to check that the specified frequencies are monotonically
+        // increasing, to determine whether the noise integrals can be
+        // calculated when DATA=<name> is used on the .NOISE line
+        double prevFreq=-1.0;
+
+        // frequency values for .HBNOISE must be > 0
+        for (int i=0; i<(*it).valList.size(); ++i)
+	{
+          if ( (*it).valList[i] <= 0 )
+	  {
+            Report::UserFatal() << "Frequency values in .DATA for .HBNOISE analysis must be > 0";
+            return false;
+          }
+          if ( calcNoiseIntegrals_ && ((*it).valList[i] <= prevFreq) )
+	  {
+            calcNoiseIntegrals_ = false;
+	    Report::UserWarning0() << "Total Noise Integrals will not be calculated, "
+		<< "since frequencies in .DATA table are not monotonically increasing";
+          }
+          prevFreq = (*it).valList[i];
+        }
+      }
+      else
+      {
+        loader_.getParamAndReduce(analysisManager_.getComm(), sweep_param.name);
+      }
+    }
+
+    // now set up the looping, etc
+    hbnoiseLoopSize_ = setSweepLoopVals(begin, end);
+  }
+  else
+  {
+    hbnoiseLoopSize_ = setupSweepParam_();
+  }
+  return bsuccess;
 }
 
 //-----------------------------------------------------------------------------
@@ -181,7 +254,7 @@ bool HBNOISE::doInit()
 //-----------------------------------------------------------------------------
 bool HBNOISE::doRun()
 {
-  return true;
+  return doInit() && doLoopProcess() && doFinish();
 }
 
 //-----------------------------------------------------------------------------
@@ -349,7 +422,7 @@ bool HBNOISE::setAnalysisParams(const Util::OptionBlock & paramsBlock)
   {
     dataSpecification_ = true;
     type_="TYPE";
-    noiseSweepVector_.push_back(parseSweepParams(paramsBlock.begin(), paramsBlock.end()));
+    hbnoiseSweepVector_.push_back(parseSweepParams(paramsBlock.begin(), paramsBlock.end()));
   }
 
   for (Util::ParamList::const_iterator it = paramsBlock.begin(),
@@ -475,6 +548,77 @@ bool HBNOISE::setLinSol(const Util::OptionBlock & OB)
   return true;
 }
 
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::setupSweepParam_
+// Purpose       : Processes sweep parameters.
+// Special Notes : Used for HBNOISE analysis classes.
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/13/2025
+//-----------------------------------------------------------------------------
+int HBNOISE::setupSweepParam_()
+{
+  double fstart, fstop;
+  double fcount = 0.0;
+
+  fstart = fOffsetStart_;
+  fstop = fOffsetStop_;
+
+  if (DEBUG_ANALYSIS && isActive(Diag::TIME_PARAMETERS))
+  {
+    Xyce::dout() << std::endl << std::endl;
+    Xyce::dout() << section_divider << std::endl;
+    Xyce::dout() << "HBNOISE::setupSweepParam_" << std::endl;
+  }
+
+    if (type_ == "LIN")
+    {
+      int np = static_cast<int>(np_);
+
+      if ( np == 1)
+        fstep_ = 0;
+      else
+        fstep_  = (fstop - fstart)/(np_ - 1.0);
+
+      fcount = np_;
+      if (DEBUG_ANALYSIS && isActive(Diag::TIME_PARAMETERS))
+      {
+        Xyce::dout() << "fstep   = " << fstep_  << std::endl;
+      }
+    }
+    else if (type_ == "DEC")
+    {
+      stepMult_ = std::pow(10.0, 1.0/np_);
+      fcount   = floor(fabs(std::log10(fstart) - std::log10(fstop)) * np_ + 1.0);
+      if (DEBUG_ANALYSIS && isActive(Diag::TIME_PARAMETERS))
+      {
+        Xyce::dout() << "stepMult_ = " << stepMult_  << std::endl;
+      }
+    }
+    else if (type_ == "OCT")
+    {
+      stepMult_ = std::pow(2.0, 1.0/np_);
+
+      // changed to remove dependence on "log2" function, which apparently
+      // doesn't exist in the math libraries of FreeBSD or the mingw
+      // cross-compilation suite.   Log_2(x)=log_e(x)/log_e(2.0)
+      double ln2 = std::log(2.0);
+      fcount   = floor(fabs(std::log(fstart) - std::log(fstop))/ln2 * np_ + 1.0);
+      if (DEBUG_ANALYSIS && isActive(Diag::TIME_PARAMETERS))
+      {
+        Xyce::dout() << "stepMult_ = " << stepMult_  << std::endl;
+      }
+    }
+    else
+    {
+      Report::UserFatal0() << "Unsupported NOISE sweep type: " << type_;
+    }
+
+  // At this point, pinterval equals the total number of steps
+  // for the step loop.
+  return static_cast<int> (fcount);
+}
+
 namespace {
 
 typedef Util::Factory<AnalysisBase, HBNOISE> HBNOISEFactoryBase;
@@ -489,6 +633,14 @@ typedef Util::Factory<AnalysisBase, HBNOISE> HBNOISEFactoryBase;
 //-----------------------------------------------------------------------------
 class HBNOISEFactory : public HBNOISEFactoryBase
 {
+//-----------------------------------------------------------------------------
+// Function      : HBNOISEFactory
+// Purpose       : Constructor
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/13/2025
+//-----------------------------------------------------------------------------
 public:
   HBNOISEFactory(
     Analysis::AnalysisManager &          analysis_manager,
@@ -515,6 +667,20 @@ public:
   virtual ~HBNOISEFactory()
   {}
 
+  //-----------------------------------------------------------------------------
+  // Function      : create
+  // Purpose       :
+  // Special Notes :
+  // Scope         : public
+  // Creator       : Meysam Bahmanian
+  // Creation Date : 5/14/2025
+  //-----------------------------------------------------------------------------
+  ///
+  /// Create a new HBNOISE analysis and applies the analysis and time integrator option blocks.
+  ///
+  /// @return new HBNOISE analysis object
+  ///
+
   HBNOISE *create() const
   {
     analysisManager_.setAnalysisMode(ANP_MODE_HBNOISE);
@@ -527,12 +693,40 @@ public:
     hbnoise->setAnalysisParams(hbnoiseAnalysisOptionBlock_);
     hbnoise->setLinSol(linSolOptionBlock_);
 
+    // Process data statements
+    for (std::vector<Util::OptionBlock>::const_iterator it = dataOptionBlockVec_.begin(), end = dataOptionBlockVec_.end(); it != end; ++it)
+    {
+      hbnoise->setDataStatements(*it);
+    }
+
     return hbnoise;
   }
 
+
+  //-----------------------------------------------------------------------------
+  // Function      : setHBNOISEAnalysisOptionBlock
+  // Purpose       :
+  // Special Notes :
+  // Scope         : public
+  // Creator       : Meysam Bahmanian
+  // Creation Date : Thu Jan 29 13:00:14 2015
+  //-----------------------------------------------------------------------------
+  ///
+  /// Saves the analysis parsed options block in the factory.
+  ///
+  /// @invariant Overwrites any previously specified analysis option block.
+  ///
+  /// @param option_block parsed option block
+  ///
   void setHBNOISEAnalysisOptionBlock(const Util::OptionBlock &option_block)
   {
     hbnoiseAnalysisOptionBlock_ = option_block;
+  }
+
+  bool setDotDataBlock(const Util::OptionBlock &option_block)
+  {
+    dataOptionBlockVec_.push_back(option_block);
+    return true;
   }
 
   // Move these to public section
@@ -549,6 +743,7 @@ public:
 private:
   Util::OptionBlock     hbnoiseAnalysisOptionBlock_;
   Util::OptionBlock     linSolOptionBlock_;
+  std::vector<Util::OptionBlock>        dataOptionBlockVec_;
 };
 
 // .HBNOISE
@@ -761,6 +956,10 @@ bool registerHBNOISEFactory(FactoryBlock &factory_block)
   // Register the command parser and processor
   factory_block.optionsManager_.addCommandParser(".HBNOISE", extractHBNOISEData);
   factory_block.optionsManager_.addCommandProcessor("HBNOISE", new HBNOISEAnalysisReg(*factory));
+
+  factory_block.optionsManager_.addCommandProcessor("DATA",
+    IO::createRegistrationOptions(*factory, &HBNOISEFactory::setDotDataBlock) );
+
 
   return true;
 }

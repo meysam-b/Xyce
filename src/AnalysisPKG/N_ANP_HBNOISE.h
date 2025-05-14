@@ -30,6 +30,7 @@
 #define Xyce_N_ANP_HBNOISE_h
 
 #include <vector>
+#include <map>
 
 #include <Teuchos_SerialDenseMatrix.hpp>
 #include <Teuchos_RCP.hpp>
@@ -76,10 +77,12 @@ public:
   virtual const TimeIntg::TIAParams &getTIAParams() const;
   virtual bool doRun();
   virtual bool getDCOPFlag() const;
+  virtual bool convertDataToSweepParams();
 
   // Add parameter setting methods
-  bool setAnalysisParams(const Util::OptionBlock & option_block);
-  bool setLinSol(const Util::OptionBlock & option_block);
+  bool setAnalysisParams(const Util::OptionBlock & paramsBlock);
+  bool setLinSol(const Util::OptionBlock & OB);
+  bool setDataStatements(const Util::OptionBlock & paramsBlock);
 
 protected:
   virtual bool doInit();
@@ -106,18 +109,31 @@ private:
   bool outputNodeSingle_;              // Flag for single output node
   std::string outputNode1_;            // First output node
   std::string outputNode2_;            // Second output node
-  double harmonicNumber_;              // Harmonic number for noise analysis
+  double harmonicNumber_;              // Harmonic number for hbnoise analysis
   std::string type_;                   // Type of sweep (LIN, DEC, OCT)
   double np_;                          // Number of points
-  double fOffsetStart_;                // Start offset frequency for noise analysis
-  double fOffsetStop_;                 // Stop offset frequency for noise analysis
+  double fOffsetStart_;                // Start offset frequency for hbnoise analysis
+  double fOffsetStop_;                 // Stop offset frequency for hbnoise analysis
+  double fAbsStart_;                   // Start offset frequency for hbnoise analysis
+  double fAbsStop_;                    // Stop offset frequency for hbnoise analysis
+  double stepMult_;                    // Multiplier for frequency steps (DEC/OCT)
+  double fstep_;                       // Step size for frequency (LIN)
   int pts_per_summary_;                // Points per summary
   bool dataSpecification_;             // Flag for data specification
-  SweepVector noiseSweepVector_;       // Vector of sweep parameters
+  int hbnoiseLoopSize_;                // Size of the hbnoise analysis loop
+  SweepVector hbnoiseSweepVector_;       // Vector of sweep parameters
+  std::map< std::string, std::vector<std::string> > dataNamesMap_;  // Maps dataset name to parameter names
+  std::map< std::string, std::vector< std::vector<double> > > dataTablesMap_;  // Maps dataset name to parameter values
+
+  // hbnoise integrals are not calculated for DATA=<n> case if the
+  // specified frequencies are not monotonically increasing
+  bool calcNoiseIntegrals_;
 
   // Option blocks for parameters
   Util::OptionBlock saved_lsOB_;
   Util::OptionBlock saved_timeIntOB_;
+
+  int setupSweepParam_();
 };
 
 bool registerHBNOISEFactory(FactoryBlock &factory_block);
