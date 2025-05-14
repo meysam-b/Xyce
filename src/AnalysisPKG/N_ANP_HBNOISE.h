@@ -103,9 +103,17 @@ private:
   Parallel::Manager *                   pdsMgrPtr_;
 
   // HBNOISE specific parameters
-  double fOffsetStart_;        // Start offset frequency for noise analysis
-  double fOffsetStop_;        // Stop offset frequency for noise analysis
-  std::string outputNode_;    // Output node for noise analysis
+  bool outputNodeSingle_;              // Flag for single output node
+  std::string outputNode1_;            // First output node
+  std::string outputNode2_;            // Second output node
+  double harmonicNumber_;              // Harmonic number for noise analysis
+  std::string type_;                   // Type of sweep (LIN, DEC, OCT)
+  double np_;                          // Number of points
+  double fOffsetStart_;                // Start offset frequency for noise analysis
+  double fOffsetStop_;                 // Stop offset frequency for noise analysis
+  int pts_per_summary_;                // Points per summary
+  bool dataSpecification_;             // Flag for data specification
+  SweepVector noiseSweepVector_;       // Vector of sweep parameters
 
   // Option blocks for parameters
   Util::OptionBlock saved_lsOB_;

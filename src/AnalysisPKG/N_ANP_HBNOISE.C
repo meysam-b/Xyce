@@ -34,6 +34,8 @@
 #include <N_ANP_OutputMgrAdapter.h>
 #include <N_ANP_Report.h>
 #include <N_ANP_Transient.h>
+#include <N_ANP_SweepParam.h>
+#include <N_ANP_SweepParamFreeFunctions.h>
 #include <N_DEV_DeviceMgr.h>
 #include <N_IO_ActiveOutput.h>
 #include <N_IO_CircuitBlock.h>
@@ -114,9 +116,16 @@ HBNOISE::HBNOISE(
     initialConditionsManager_(initial_conditions_manager),
     restartManager_(restart_manager),
     pdsMgrPtr_(0),
-    fOffsetStart_(0.0),
-    fOffsetStop_(0.0),
-    outputNode_("")
+    outputNodeSingle_(true),
+    outputNode1_(""),
+    outputNode2_(""),
+    harmonicNumber_(1.0),
+    type_("DEC"),
+    np_(10.0),
+    fOffsetStart_(1.0),
+    fOffsetStop_(1.0),
+    pts_per_summary_(0),
+    dataSpecification_(false)
 {
   pdsMgrPtr_ = analysisManager_.getPDSManager();
 }
@@ -328,26 +337,129 @@ bool HBNOISE::getDCOPFlag() const
 // Creator       : Meysam Bahmanian
 // Creation Date : 5/13/2025
 //-----------------------------------------------------------------------------
-bool HBNOISE::setAnalysisParams(const Util::OptionBlock & option_block)
+bool HBNOISE::setAnalysisParams(const Util::OptionBlock & paramsBlock)
 {
-  for (Util::ParamList::const_iterator it = option_block.begin(), end = option_block.end(); it != end; ++it)
+  bool retval=true;
+
+  // Check for DATA first.  If DATA is present, then use the sweep functions,
+  // rather than the HBNOISE specific built-in ones.  This also supports the case
+  // of having multiple .HBNOISE lines in the netlist, wherein only the last .HBNOISE
+  // line is used.
+  if (isDataSpecified(paramsBlock))
   {
-    if ((*it).uTag() == "FSTART")
+    dataSpecification_ = true;
+    type_="TYPE";
+    noiseSweepVector_.push_back(parseSweepParams(paramsBlock.begin(), paramsBlock.end()));
+  }
+
+  for (Util::ParamList::const_iterator it = paramsBlock.begin(),
+      end = paramsBlock.end(); it != end; ++it)
+  {
+    if ((*it).uTag() == "V")
     {
-      fOffsetStart_ = (*it).getValue<double>();
+      if ((*it).getImmutableValue<double>()==1.0)
+      {
+        outputNodeSingle_ = true;
+        Util::ParamList::const_iterator itNode = it;
+        itNode++;
+        outputNode1_ = (*itNode).uTag();
+      }
+      else if ((*it).getImmutableValue<double>()==2.0)
+      {
+        outputNodeSingle_ = false;
+        Util::ParamList::const_iterator itNode = it;
+        itNode++;
+        outputNode1_ = (*itNode).uTag();
+        itNode++;
+        outputNode2_ = (*itNode).uTag();
+      }
+    }
+    else if ((*it).uTag() == "HARMONIC")
+    {
+      harmonicNumber_ = (*it).getImmutableValue<double>();
+      ExtendedString npStr((*it).stringValue());
+      if ( !npStr.isInt() )
+      {
+        Report::UserError0() << "Harmonic parameter on .HBNOISE line must be an integer";
+        retval = false;
+      }
+    }
+    else if ((*it).uTag() == "TYPE" && !dataSpecification_)
+    {
+      type_ = (*it).stringValue();
+    }
+    else if ((*it).uTag() == "NP")
+    {
+      np_ = (*it).getImmutableValue<double>();
+      ExtendedString npStr((*it).stringValue());
+      if ( !npStr.isInt() )
+      {
+        Report::UserError0() << "Points Value parameter on .HBNOISE line must be an integer";
+        retval = false;
+      }
+    }
+    else if ((*it).uTag() == "FSTART")
+    {
+      fOffsetStart_ = (*it).getImmutableValue<double>();
     }
     else if ((*it).uTag() == "FSTOP")
     {
-      fOffsetStop_ = (*it).getValue<double>();
+      fOffsetStop_ = (*it).getImmutableValue<double>();
     }
-    else if ((*it).uTag() == "OUTPUT")
+    else if ((*it).uTag() == "PTS_PER_SUMMARY")
     {
-      outputNode_ = (*it).stringValue();
+      pts_per_summary_ = (*it).getImmutableValue<int>();
     }
   }
 
-  return true;
+  // exit from here if DATA=<name> is used on the .NOISE line
+  if (dataSpecification_) return retval;
+
+  // debug output, when DATA=<name> is not used
+  if (DEBUG_ANALYSIS && isActive(Diag::TIME_PARAMETERS))
+  {
+    dout() << section_divider << std::endl
+           << "HBNOISE simulation parameters"
+           << std::endl;
+
+    if (outputNodeSingle_)
+    {
+      dout() << "Output Node: V(" << outputNode1_ << ")" <<std::endl;
+    }
+    else
+    {
+      dout() << "Output Node: V(" << outputNode1_ << ","<<outputNode2_<<")" <<std::endl;
+    }
+
+    dout() << "harmonic number = " << harmonicNumber_ << std::endl
+           << "number of points  = " << np_ << std::endl
+           << "start offset frequency = " << fOffsetStart_ << std::endl
+           << "stop offset frequency = " << fOffsetStop_ << std::endl
+           << "pts_per_summary = " << pts_per_summary_
+             << std::endl;
+  }
+
+  // error checking of parameters, when DATA=<name> is not used
+  if ( np_ < 1 )
+  {
+    Report::UserError0() << "Points Value parameter on .HBNOISE line must be >= 1";
+    retval = false;
+  }
+  if ( (fOffsetStart_ <=0) || (fOffsetStop_ <= 0) )
+  {
+    Report::UserError0() << "Illegal values for start or end offset frequencies on .HBNOISE line. " <<
+       "Both values must be > 0";
+    retval = false;
+  }
+  if ( fOffsetStop_ < fOffsetStart_ )
+  {
+    Report::UserError0() << "End offset frequency must not be less than start offset frequency on .HBNOISE line";
+    retval = false;
+  }
+
+  return retval;
 }
+
 
 //-----------------------------------------------------------------------------
 // Function      : HBNOISE::setLinSol
