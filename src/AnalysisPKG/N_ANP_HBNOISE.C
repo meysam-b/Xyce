@@ -28,9 +28,9 @@
 
 #include <Xyce_config.h>
 
+#include <N_ANP_HBNOISE.h>
 #include <N_ANP_AnalysisManager.h>
 #include <N_ANP_DCSweep.h>
-#include <N_ANP_HBNOISE.h>
 #include <N_ANP_OutputMgrAdapter.h>
 #include <N_ANP_Report.h>
 #include <N_ANP_Transient.h>
@@ -79,6 +79,8 @@
 #include <N_TOP_Topology.h>
 #include <N_PDS_Comm.h>
 
+#include "N_ANP_HB.h"
+
 using Teuchos::rcp;
 using Teuchos::RCP;
 using Teuchos::rcp_dynamic_cast;
@@ -97,6 +99,19 @@ namespace Analysis {
 bool HBNOISE::convertDataToSweepParams()
 {
   return convertData(hbnoiseSweepVector_, dataNamesMap_, dataTablesMap_);
+}
+
+//-----------------------------------------------------------------------------
+// Function      : NOISE::setDataStatements
+// Purpose       :
+// Special Notes :
+// Scope         : public
+// Creator       : Eric R. Keiter, SNL
+// Creation Date : 9/5/18
+//-----------------------------------------------------------------------------
+bool HBNOISE::setDataStatements(const Util::OptionBlock & paramsBlock)
+{
+  return processDataStatements(paramsBlock, dataNamesMap_, dataTablesMap_);
 }
 
 //-----------------------------------------------------------------------------
@@ -137,12 +152,16 @@ HBNOISE::HBNOISE(
     np_(10.0),
     fOffsetStart_(1.0),
     fOffsetStop_(1.0),
+    fAbsStart_(0.0),
+    fAbsStop_(0.0),
+    stepMult_(0.0),
     pts_per_summary_(0),
     dataSpecification_(false),
     hbnoiseLoopSize_(0),
-    stepMult_(0.0),
     fstep_(0.0),
-    calcNoiseIntegrals_(true)
+    calcNoiseIntegrals_(true),
+    hbAnalysis_(nullptr),
+    freq_(0.0)
 {
   pdsMgrPtr_ = analysisManager_.getPDSManager();
 }
@@ -157,6 +176,25 @@ HBNOISE::HBNOISE(
 //-----------------------------------------------------------------------------
 HBNOISE::~HBNOISE()
 {
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::getHBAnalysis
+// Purpose       : Get the HB analysis object from the analysis manager
+// Special Notes :
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/16/2025
+//-----------------------------------------------------------------------------
+Analysis::HB* HBNOISE::getHBAnalysis()
+{
+  std::vector<ProcessorBase *>& analyses = analysisManager_.getAnalysisVector();
+  for (std::vector<ProcessorBase *>::const_iterator it = analyses.begin(); it != analyses.end(); ++it) {
+    if (Analysis::HB* hb = dynamic_cast<Analysis::HB*>(*it)) {
+      return hb;
+    }
+  }
+  return nullptr;
 }
 
 //-----------------------------------------------------------------------------
@@ -187,6 +225,26 @@ bool HBNOISE::doInit()
 {
   bool bsuccess = true;
 
+  // get the HB analysis object first
+  hbAnalysis_ = getHBAnalysis();
+  if (!hbAnalysis_)
+  {
+    Report::UserError0() << "HBNOISE analysis requires an HB analysis to be defined first";
+    return false;
+  }
+  // check if the HB analysis has a single frequency
+  std::vector<double> freqs = hbAnalysis_->freqs_;
+  if (freqs.size() > 1)
+  {
+    Report::UserError0() << "HBNOISE analysis requires a single frequency to be specified";
+    return false;
+  }
+  // get the frequency from the HB analysis
+  freq_ = freqs[0];
+
+  analysisManager_.pushActiveAnalysis(hbAnalysis_);
+  hbAnalysis_->run();
+
   // check if the "DATA" specification was used.  If so, create a new vector of
   // SweepParams, in the "TABLE" style.
   if (dataSpecification_)
@@ -208,7 +266,7 @@ bool HBNOISE::doInit()
       {
         // used to check that the specified frequencies are monotonically
         // increasing, to determine whether the noise integrals can be
-        // calculated when DATA=<name> is used on the .NOISE line
+        // calculated when DATA=<name> is used on the .HBNOISE line
         double prevFreq=-1.0;
 
         // frequency values for .HBNOISE must be > 0
@@ -241,6 +299,7 @@ bool HBNOISE::doInit()
   {
     hbnoiseLoopSize_ = setupSweepParam_();
   }
+
   return bsuccess;
 }
 

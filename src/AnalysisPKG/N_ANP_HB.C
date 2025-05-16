@@ -1260,9 +1260,21 @@ void HB::prepareHBOutput(
   }
 }
 
+//-----------------------------------------------------------------------------
+// Function      : HB::storeSolutionForHBNOISE
+// Purpose       : Stores a copy of the solution vector when HBNOISE analysis is present
+// Special Notes : Only stores if hbNoiseSpecified_ flag is true
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/15/2025
+//-----------------------------------------------------------------------------
+void HB::storeSolutionForHBNOISE(const Linear::Vector & solnVecPtr)
+{
+  storedSolution_ = Teuchos::rcp(solnVecPtr.cloneCopyVector());
+}
 
 //-----------------------------------------------------------------------------
-// Function      : HB::accumulateStatistics()
+// Function      : HB::accumulateStatistics_()
 // Purpose       : Add in the statistics from the current analysis object
 // Special Notes :
 // Scope         : private

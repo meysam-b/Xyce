@@ -413,6 +413,11 @@ public:
     return analysisCreatorVector_;
   }
 
+  std::vector<ProcessorBase *> &getAnalysisVector()
+  {
+    return analysisVector_;
+  }
+
   Parallel::Manager *getPDSManager() const
   {
     return parallelManager_;

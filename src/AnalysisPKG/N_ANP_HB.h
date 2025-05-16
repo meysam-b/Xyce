@@ -67,6 +67,8 @@ namespace Analysis {
 //-------------------------------------------------------------------------
 class HB : public AnalysisBase, public Util::ListenerAutoSubscribe<StepEvent>
 {
+  friend class HBNOISE;
+
 public:
   HB(
     AnalysisManager &                   analysis_manager,
@@ -155,6 +157,8 @@ public:
                        Teuchos::RCP<Linear::BlockVector> & freqDomainJunctionVoltageVecImaginary ) ;
 
 private:
+  // Store solution vector for HBNOISE analysis
+  void storeSolutionForHBNOISE(const Linear::Vector & solnVecPtr);
 
   // Add in solver info and timing info from current analysisObject_
   void accumulateStatistics_(AnalysisBase &analysis);
@@ -183,6 +187,11 @@ private:
   bool updateIFT_( std::vector<double>& tPoints);
   
   bool initializeOscOut( );
+
+  // Add new members for HBNOISE support
+  bool hbNoiseSpecified_;  // Flag to indicate if HBNOISE analysis is present in netlist
+  Teuchos::RCP<Linear::Vector> storedSolution_;  // Storage for solution when HBNOISE is present
+
 private:
   AnalysisManager &                     analysisManager_;
   Loader::Loader &                      loader_;

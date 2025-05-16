@@ -93,6 +93,8 @@ protected:
   virtual bool doHandlePredictor();
 
 private:
+  Analysis::HB* getHBAnalysis();
+
   // Member variables similar to HB
   AnalysisManager &                     analysisManager_;
   Loader::Loader &                      loader_;
@@ -124,6 +126,7 @@ private:
   SweepVector hbnoiseSweepVector_;       // Vector of sweep parameters
   std::map< std::string, std::vector<std::string> > dataNamesMap_;  // Maps dataset name to parameter names
   std::map< std::string, std::vector< std::vector<double> > > dataTablesMap_;  // Maps dataset name to parameter values
+  Analysis::HB *hbAnalysis_;
 
   // hbnoise integrals are not calculated for DATA=<n> case if the
   // specified frequencies are not monotonically increasing
@@ -132,6 +135,8 @@ private:
   // Option blocks for parameters
   Util::OptionBlock saved_lsOB_;
   Util::OptionBlock saved_timeIntOB_;
+
+  double freq_;  // Store primary frequency from HB analysis
 
   int setupSweepParam_();
 };
