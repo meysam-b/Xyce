@@ -28,6 +28,10 @@
 
 #include <Xyce_config.h>
 
+#include <iomanip>
+
+#include <fstream>
+
 #include <N_ANP_HBNOISE.h>
 #include <N_ANP_AnalysisManager.h>
 #include <N_ANP_DCSweep.h>
@@ -44,13 +48,23 @@
 #include <N_IO_PkgOptionsMgr.h>
 #include <N_IO_SpiceSeparatedFieldTool.h>
 #include <N_IO_PrintTypes.h>
+#include <N_LAS_BlockMatrix.h>
 #include <N_LAS_BlockSystemHelpers.h>
 #include <N_LAS_BlockVector.h>
 #include <N_LAS_HBBuilder.h>
 #include <N_LAS_HBPrecondFactory.h>
 #include <N_LAS_HBSolverFactory.h>
 #include <N_LAS_PrecondFactory.h>
+#include <N_LAS_Graph.h>
+#include <N_LAS_Matrix.h>
+#include <N_LAS_MultiVector.h>
 #include <N_LAS_System.h>
+#include <N_LAS_SystemHelpers.h>
+#include <N_LAS_Solver.h>
+#include <N_LAS_Problem.h>
+#include <N_LAS_TranSolverFactory.h>
+#include <N_LOA_Loader.h>
+#include <N_NLS_Manager.h>
 #include <N_LOA_HBLoader.h>
 #include <N_LOA_NonlinearEquationLoader.h>
 #include <N_NLS_Manager.h>
@@ -80,6 +94,7 @@
 #include <N_PDS_Comm.h>
 
 #include "N_ANP_HB.h"
+#include "N_ANP_NoiseData.h"
 
 using Teuchos::rcp;
 using Teuchos::RCP;
@@ -128,10 +143,8 @@ HBNOISE::HBNOISE(
   Nonlinear::Manager &                  nonlinear_manager,
   Loader::Loader &                      loader,
   Device::DeviceMgr &                   device_manager,
-  Linear::Builder &                     builder,
   Topo::Topology &                      topology,
-  IO::InitialConditionsManager &        initial_conditions_manager,
-  IO::RestartMgr &                      restart_manager)
+  IO::InitialConditionsManager &        initial_conditions_manager)
   : AnalysisBase(analysis_manager, "HBNOISE"),
     StepEventListener(&analysis_manager),
     analysisManager_(analysis_manager),
@@ -139,11 +152,14 @@ HBNOISE::HBNOISE(
     linearSystem_(linear_system),
     nonlinearManager_(nonlinear_manager),
     deviceManager_(device_manager),
-    builder_(builder),
     topology_(topology),
     initialConditionsManager_(initial_conditions_manager),
-    restartManager_(restart_manager),
     pdsMgrPtr_(0),
+    currentAnalysisObject_(0),
+    hbLoaderPtr_(0),
+    hbBuilderPtr_(0),
+    builderPtr_(0),
+    hbLinearSystem_(0),
     outputNodeSingle_(true),
     outputNode1_(""),
     outputNode2_(""),
@@ -152,17 +168,26 @@ HBNOISE::HBNOISE(
     np_(10.0),
     fOffsetStart_(1.0),
     fOffsetStop_(1.0),
-    fAbsStart_(0.0),
-    fAbsStop_(0.0),
     stepMult_(0.0),
+    fstep_(0.0),
     pts_per_summary_(0),
     dataSpecification_(false),
     hbnoiseLoopSize_(0),
-    fstep_(0.0),
+    hbAnalysis_(0),
+    bVecRealPtr(linearSystem_.builder().createVector()),
+    bVecImagPtr(linearSystem_.builder().createVector()),
+    bNoiseVecRealPtr(linearSystem_.builder().createVector()),
+    bNoiseVecImagPtr(linearSystem_.builder().createVector()),
     calcNoiseIntegrals_(true),
-    hbAnalysis_(nullptr),
-    freq_(0.0)
+    freq_(0.0),
+    size_(0),
+    period_(0.0)
 {
+  bVecRealPtr->putScalar(0.0);
+  bVecImagPtr->putScalar(0.0);
+  bNoiseVecRealPtr->putScalar(0.0);
+  bNoiseVecImagPtr->putScalar(0.0);
+  
   pdsMgrPtr_ = analysisManager_.getPDSManager();
 }
 
@@ -176,6 +201,10 @@ HBNOISE::HBNOISE(
 //-----------------------------------------------------------------------------
 HBNOISE::~HBNOISE()
 {
+  for (size_t i = 0; i < noiseDataVec_.size(); ++i) {
+    delete noiseDataVec_[i];
+  }
+  noiseDataVec_.clear();
 }
 
 //-----------------------------------------------------------------------------
@@ -232,6 +261,7 @@ bool HBNOISE::doInit()
     Report::UserError0() << "HBNOISE analysis requires an HB analysis to be defined first";
     return false;
   }
+  hbAnalysis_->hbNoise_ = true;
   // check if the HB analysis has a single frequency
   std::vector<double> freqs = hbAnalysis_->freqs_;
   if (freqs.size() > 1)
@@ -240,10 +270,24 @@ bool HBNOISE::doInit()
     return false;
   }
   // get the frequency from the HB analysis
+  size_ = hbAnalysis_->size_;
   freq_ = freqs[0];
+  period_ = 1.0/freq_;
+  times_.resize(size_);
+  for( int i = 0; i < size_; ++i )
+    times_[i] = i*period_/(size_-1);
 
-  analysisManager_.pushActiveAnalysis(hbAnalysis_);
-  hbAnalysis_->run();
+  // Setup noiseDataVec_ (similar to NOISE constructor/init)
+  // Ensure loader_ is ready and devices are instantiated.
+  // This might need to happen after hbAnalysis_->doInit() if that's what sets up the relevant loader state.
+  // For now, assume loader_ is the correct one and ready.
+  int numNoiseDevices = loader_.getNumNoiseDevices();
+  noiseDataVec_.resize(numNoiseDevices);
+  for (int i = 0; i < numNoiseDevices; ++i) {
+    noiseDataVec_[i] = new Analysis::NoiseData();
+  }
+  loader_.setupNoiseSources(noiseDataVec_); // This populates deviceName, noiseNames, li_Pos, li_Neg, etc.
+
 
   // check if the "DATA" specification was used.  If so, create a new vector of
   // SweepParams, in the "TABLE" style.
@@ -300,6 +344,15 @@ bool HBNOISE::doInit()
     hbnoiseLoopSize_ = setupSweepParam_();
   }
 
+  // after dataSpecification_ validation, run the HB analysis
+  analysisManager_.pushActiveAnalysis(hbAnalysis_);
+  bsuccess = hbAnalysis_->run();
+  hbBuilderPtr_ = hbAnalysis_->hbBuilderPtr_;
+  builderPtr_ = &(hbAnalysis_->builder_);
+  hbLoaderPtr_ = hbAnalysis_->hbLoaderPtr_;
+  updateLinearTimeVariantSystem_C_and_G_();
+  createHarmonicSpaceLinearSystem_();
+
   return bsuccess;
 }
 
@@ -326,6 +379,248 @@ bool HBNOISE::doRun()
 //-----------------------------------------------------------------------------
 bool HBNOISE::doLoopProcess()
 {
+  return true;
+}
+
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::createHarmonicSpaceLinearSystem_
+// Purpose       : Creates the harmonic coupled matrix based on LTV system
+//                 Ct_ and Gt_. Similar to NOISE::createACLinearSystem_() 
+//                 but handles all the harmonics processed in HB
+// Special Notes : The set of functions updateLinearTimeVariantSystem_C_and_G_() and 
+//                 createHarmonicSpaceLinearSystem_() are computationally suboptimal
+//                 and they apply Fourier tranform to a sparse matrix. They most likely
+//                 will also fail to handle Touchstone files.
+//                 But they are easier to understand for defining our Gold Standard
+//                 They will be replaced later with a more efficient approach.
+//                 similar to how HBLoader::loadDAEVectors() works
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/22/2025
+//-----------------------------------------------------------------------------
+bool HBNOISE::createHarmonicSpaceLinearSystem_(){
+  // first take the Fourier Transform of Ct_ and Gt_
+  for (int i=0; i<BlockSize_; i++){
+    Cf_.push_back(hbBuilderPtr_->createExpandedRealFormTransposeBlockVector());
+    Gf_.push_back(hbBuilderPtr_->createExpandedRealFormTransposeBlockVector());
+    Cf_[i]->putScalar(0.0);
+    Gf_[i]->putScalar(0.0);
+    hbLoaderPtr_->permutedFFT2(*(Ct_[i]), &*(Cf_[i]));
+    hbLoaderPtr_->permutedFFT2(*(Gt_[i]), &*(Gf_[i]));
+  }
+  if (DEBUG_HBNOISE)
+  {
+    Xyce::dout() << "Reporting Gf_ Matrices, each block is a node" << std::endl;
+    for (int i=0; i<BlockSize_; i++){
+      Xyce::dout() << "Gf_[" << i << "]: " << std::endl;
+      Gf_[i]->print(Xyce::dout());
+      Xyce::dout() << std::endl;
+    }
+    //for (int i=0; i<BlockSize_; i++){
+    //  Xyce::dout() << "Cf_[" << i << "]: " << std::endl;
+    //  Cf_[i]->print(Xyce::dout());
+    //  Xyce::dout() << std::endl;
+    //}
+  }
+
+
+
+  // now take the Fourier Transform of Ct_ and Gt_
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
+// Purpose       : Updates C and G matrices for all time points in HB
+//                 Similar to NOISE::updateACLinearSystem_C_and_G_()
+//                 but handles multiple time points for HBNOISE
+// Special Notes : The set of functions updateLinearTimeVariantSystem_C_and_G_() and 
+//                 createHarmonicSpaceLinearSystem_() are computationally suboptimal
+//                 and they apply Fourier tranform to a sparse matrix. They most likely
+//                 will also fail to handle Touchstone files.
+//                 But they are easier to understand for defining our Gold Standard.
+//                 They will be replaced later with a more efficient approach,
+//                 similar to how HBLoader::loadDAEVectors() works
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/20/2025
+//-----------------------------------------------------------------------------
+bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
+{
+  // Get the frequency domain HB solution from DataStore
+  // b means to "block"
+  Linear::Vector *Xf = analysisManager_.getDataStore()->currSolutionPtr;
+  Linear::BlockVector & bXf = *dynamic_cast<Linear::BlockVector*>(Xf);
+
+  Teuchos::RCP<Linear::BlockVector> bXtPtr_ = hbBuilderPtr_->createTimeDomainBlockVector();
+  bXtPtr_->putScalar(0.0);
+
+  hbLoaderPtr_->permutedIFT(bXf, &*bXtPtr_);
+
+  Linear::BlockVector & bX = *bXtPtr_;
+  BlockCount_ = bX.blockCount(); // number of time points
+  BlockSize_ = bX.blockSize(); // number of GIDs
+
+  if (DEBUG_HBNOISE)
+  {
+    for (int i = 0; i < BlockCount_; ++i)
+    {
+      Xyce::dout() << "Solution time domain, block (" << i << "): each block is a time point" << std::endl;
+      bX.block(i).print( Xyce::dout() );
+      Xyce::dout() << std::endl;
+    }
+    for (int i = 0; i < BlockSize_; ++i)
+    {
+      Xyce::dout() << "Solution frequency domain, block (" << i << "): each block is a node" << std::endl;
+      bXf.block(i).print( Xyce::dout() );
+      Xyce::dout() << std::endl;
+    }
+  }
+
+  // Solutions:
+  Linear::Vector * currSolutionPtr = builderPtr_->createVector();
+
+  for (int i=0; i<BlockSize_; i++){
+    Ct_.push_back(hbBuilderPtr_->createTimeDomainBlockVector());
+    Gt_.push_back(hbBuilderPtr_->createTimeDomainBlockVector());
+    Ct_[i]->putScalar(0.0);
+    Gt_[i]->putScalar(0.0);
+  }
+
+  Linear::Vector * tmpQ = builderPtr_->createVector();
+  Linear::Vector * tmpF = builderPtr_->createVector();
+  Linear::Vector * tmpB = builderPtr_->createVector();
+  Linear::Matrix * tmpC;
+  Linear::Matrix * tmpG;
+  // Linear::Matrix * dQdxMatrixPtr = builderPtr_->createMatrix();
+  // Linear::Matrix * dFdxMatrixPtr = builderPtr_->createMatrix();
+  Teuchos::RCP<Linear::Matrix> dQdxMatrixPtr = rcp(builderPtr_->createMatrix());
+  Teuchos::RCP<Linear::Matrix> dFdxMatrixPtr = rcp(builderPtr_->createMatrix());
+
+  // now we store dFdx and dQdx matrices
+  for (int i = 0; i < BlockCount_; ++i)
+  {
+    deviceManager_.setFastTime(hbAnalysis_->fastTimes_[i]);
+    loader_.updateSources();  // this is here to handle "fast" sources.
+    // *appVecPtr_ = bX.block(i);
+    *currSolutionPtr = bXtPtr_->block(i);
+    analysisManager_.getDataStore()->daeQVectorPtr->putScalar(0.0);
+    analysisManager_.getDataStore()->daeFVectorPtr->putScalar(0.0);
+
+    analysisManager_.getDataStore()->dFdxdVpVectorPtr->putScalar(0.0);
+    analysisManager_.getDataStore()->dQdxdVpVectorPtr->putScalar(0.0);
+
+    analysisManager_.getDataStore()->daeQVectorPtr->putScalar(0.0);
+    analysisManager_.getDataStore()->daeFVectorPtr->putScalar(0.0);
+    analysisManager_.getDataStore()->daeBVectorPtr->putScalar(0.0);
+
+    dQdxMatrixPtr->put(0.0);
+    dFdxMatrixPtr->put(0.0);
+
+    loader_.updateState(
+                (currSolutionPtr),
+                (currSolutionPtr),
+                (currSolutionPtr),
+                (analysisManager_.getDataStore()->nextStatePtr),
+                (analysisManager_.getDataStore()->currStatePtr),
+                (analysisManager_.getDataStore()->lastStatePtr),
+                (analysisManager_.getDataStore()->nextStorePtr),
+                (analysisManager_.getDataStore()->currStorePtr),
+                (analysisManager_.getDataStore()->lastStorePtr),
+                Xyce::Device::NONLINEAR_FREQ
+                );
+
+    loader_.loadDAEVectors(
+                (currSolutionPtr),
+                (currSolutionPtr),
+                (currSolutionPtr),
+                (analysisManager_.getDataStore()->nextStatePtr),
+                (analysisManager_.getDataStore()->currStatePtr),
+                (analysisManager_.getDataStore()->lastStatePtr),
+                (analysisManager_.getDataStore()->nextStateDerivPtr),
+                (analysisManager_.getDataStore()->nextStorePtr),
+                (analysisManager_.getDataStore()->currStorePtr),
+                (analysisManager_.getDataStore()->lastStorePtr),
+                (analysisManager_.getDataStore()->nextLeadCurrentPtr),
+                (analysisManager_.getDataStore()->nextLeadCurrentQPtr),
+                (analysisManager_.getDataStore()->nextLeadDeltaVPtr),
+                (analysisManager_.getDataStore()->daeQVectorPtr),
+                (analysisManager_.getDataStore()->daeFVectorPtr),
+                (analysisManager_.getDataStore()->daeBVectorPtr),
+                (analysisManager_.getDataStore()->dFdxdVpVectorPtr),
+                (analysisManager_.getDataStore()->dQdxdVpVectorPtr),
+                Xyce::Device::NONLINEAR_FREQ
+                );
+
+    loader_.loadBVectorsforSources();
+    analysisManager_.getDataStore()->daeBVectorPtr->fillComplete();
+
+    loader_.loadDAEMatrices(
+                (currSolutionPtr),
+                analysisManager_.getDataStore()->nextStatePtr, 
+                analysisManager_.getDataStore()->nextStateDerivPtr, 
+                analysisManager_.getDataStore()->nextStorePtr, 
+                &*dQdxMatrixPtr,  
+                &*dFdxMatrixPtr,
+                Xyce::Device::NONLINEAR_FREQ
+                );
+
+    loader_.loadDAEMatrices(
+                (currSolutionPtr),
+                analysisManager_.getDataStore()->nextStatePtr, 
+                analysisManager_.getDataStore()->nextStateDerivPtr, 
+                analysisManager_.getDataStore()->nextStorePtr, 
+                &*dQdxMatrixPtr,  
+                &*dFdxMatrixPtr,
+                Xyce::Device::LINEAR_FREQ
+                );
+    
+    tmpG = &*dFdxMatrixPtr;
+    tmpC = &*dQdxMatrixPtr;
+
+    int numEntries;
+    std::vector<double> coeffs(BlockSize_); 
+    std::vector<int> colIndices(BlockSize_);
+
+    for (int j=0; j<BlockSize_; j++) {
+      tmpC->getLocalRowCopy(j, BlockSize_, numEntries, coeffs.data(), colIndices.data());
+      for (int k = 0; k < numEntries; k++) {
+        Ct_[j]->block(i)[colIndices[k]] = coeffs[k];
+      }
+    }
+
+    for (int j=0; j<BlockSize_; j++) {
+      tmpG->getLocalRowCopy(j, BlockSize_, numEntries, coeffs.data(), colIndices.data());
+      for (int k = 0; k < numEntries; k++) {
+        Gt_[j]->block(i)[colIndices[k]] = coeffs[k];
+      }
+    }
+
+    if (DEBUG_HBNOISE)
+    {
+      // print conductance matrix
+      Xyce::dout() << "dFdxMatrixPtr block(" << i << "):" << std::endl;
+      dFdxMatrixPtr->print( Xyce::dout() );
+      Xyce::dout() << std::endl;
+
+      // print capacitance matrix
+      Xyce::dout() << "dQdxMatrixPtr block(" << i << "):" << std::endl;
+      dQdxMatrixPtr->print( Xyce::dout() );
+      Xyce::dout() << std::endl;
+    }
+  }
+
+  if (DEBUG_HBNOISE)
+  {
+    Xyce::dout() << "Reporting Gt_ Matrices, each block is a time point" << std::endl;
+    for (int i=0; i<BlockSize_; i++){
+      Xyce::dout() << "Gt_[" << i << "]: " << std::endl;
+      Gt_[i]->print(Xyce::dout());
+      Xyce::dout() << std::endl;
+    }
+  }
+
   return true;
 }
 
@@ -707,20 +1002,16 @@ public:
     Nonlinear::Manager &                 nonlinear_manager,
     Loader::Loader &                     loader,
     Device::DeviceMgr &                  device_manager,
-    Linear::Builder &                    builder,
     Topo::Topology &                     topology,
-    IO::InitialConditionsManager &       initial_conditions_manager,
-    IO::RestartMgr &                     restart_manager)
+    IO::InitialConditionsManager &       initial_conditions_manager)
     : HBNOISEFactoryBase(),
       analysisManager_(analysis_manager),
       linearSystem_(linear_system),
       nonlinearManager_(nonlinear_manager),
       loader_(loader),
       deviceManager_(device_manager),
-      builder_(builder),
       topology_(topology),
-      initialConditionsManager_(initial_conditions_manager),
-      restartManager_(restart_manager)
+      initialConditionsManager_(initial_conditions_manager)
   {}
 
   virtual ~HBNOISEFactory()
@@ -746,8 +1037,7 @@ public:
 
     HBNOISE *hbnoise = new HBNOISE(analysisManager_, linearSystem_,
                                   nonlinearManager_, loader_, deviceManager_,
-                                  builder_, topology_, initialConditionsManager_,
-                                  restartManager_);
+                                  topology_, initialConditionsManager_);
 
     hbnoise->setAnalysisParams(hbnoiseAnalysisOptionBlock_);
     hbnoise->setLinSol(linSolOptionBlock_);
@@ -794,10 +1084,8 @@ public:
   Nonlinear::Manager &                  nonlinearManager_;
   Loader::Loader &                      loader_;
   Device::DeviceMgr &                   deviceManager_;
-  Linear::Builder &                     builder_;
   Topo::Topology &                      topology_;
   IO::InitialConditionsManager &        initialConditionsManager_;
-  IO::RestartMgr &                      restartManager_;
 
 private:
   Util::OptionBlock     hbnoiseAnalysisOptionBlock_;
@@ -1007,8 +1295,7 @@ bool registerHBNOISEFactory(FactoryBlock &factory_block)
   HBNOISEFactory *factory = new HBNOISEFactory(factory_block.analysisManager_,
     factory_block.linearSystem_, factory_block.nonlinearManager_,
     factory_block.loader_, factory_block.deviceManager_,
-    factory_block.builder_, factory_block.topology_,
-    factory_block.initialConditionsManager_, factory_block.restartManager_);
+    factory_block.topology_, factory_block.initialConditionsManager_);
 
   addAnalysisFactory(factory_block, factory);
 

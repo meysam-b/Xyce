@@ -132,6 +132,7 @@ HB::HB(
     saveIcData_(false),
     useStartupICs_(false),
     taHB_(1),
+    hbNoise_(false),
     hbOsc_(false),
     refID_(-1),
     refNode_(""),

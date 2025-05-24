@@ -107,6 +107,12 @@ static const int DEBUG_HB = 1;
 static const int DEBUG_HB = 0;
 #endif
 
+#ifdef Xyce_DEBUG_HBNOISE
+static const int DEBUG_HBNOISE = 1;
+#else
+static const int DEBUG_HBNOISE = 0;
+#endif
+
 #ifdef Xyce_DEBUG_MPDE
 static const int DEBUG_MPDE = 1;
 #else

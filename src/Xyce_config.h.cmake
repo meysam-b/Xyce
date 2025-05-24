@@ -95,6 +95,7 @@
 #cmakedefine Xyce_DEBUG_EXCESS_PHASE
 #cmakedefine Xyce_DEBUG_EXPRESSION
 #cmakedefine Xyce_DEBUG_HB
+#cmakedefine Xyce_DEBUG_HBNOISE
 #cmakedefine Xyce_DEBUG_IC
 #cmakedefine Xyce_DEBUG_IC_Gmin
 #cmakedefine Xyce_DEBUG_IO

@@ -688,6 +688,10 @@ bool NOISE::doInit()
   // outputManagerAdapter_.outputDCOP(*analysisManager_.getDataStore()->nextSolutionPtr);
   initialConditionsManager_.outputDCOP(outputManagerAdapter_.getComm(), topology_.getSolutionNodeNameMap(), *analysisManager_.getDataStore()->nextSolutionPtr);
 
+  // comments from Meysam Bahmanian
+  // 19-May-2025
+  // This approach is problematic. The specifiedSource_ is not used at all, and instead, DNI relies on the exitation
+  // amplitudes. Both input and output refered noise should not be a function of the source amplitudes.
   loader_.loadBVectorsforAC (bVecRealPtr, bVecImagPtr);
 
   static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish

@@ -55,15 +55,13 @@ class HBNOISE : public AnalysisBase, public Util::ListenerAutoSubscribe<StepEven
 {
 public:
   HBNOISE(
-    AnalysisManager &analysis_manager,
-    Linear::System & linear_system,
-    Nonlinear::Manager & nonlinear_manager,
-    Loader::Loader &loader,
-    Device::DeviceMgr & device_manager,
-    Linear::Builder & builder,
-    Topo::Topology & topology,
-    IO::InitialConditionsManager & initial_conditions_manager,
-    IO::RestartMgr & restart_manager);
+    AnalysisManager &                     analysis_manager,
+    Linear::System &                      linear_system,
+    Nonlinear::Manager &                  nonlinear_manager,
+    Loader::Loader &                      loader,
+    Device::DeviceMgr &                   device_manager,
+    Topo::Topology &                      topology,
+    IO::InitialConditionsManager &        initial_conditions_manager);
 
   virtual ~HBNOISE();
 
@@ -94,6 +92,9 @@ protected:
 
 private:
   Analysis::HB* getHBAnalysis();
+  int setupSweepParam_();
+  bool updateLinearTimeVariantSystem_C_and_G_();
+  bool createHarmonicSpaceLinearSystem_();
 
   // Member variables similar to HB
   AnalysisManager &                     analysisManager_;
@@ -101,12 +102,15 @@ private:
   Linear::System &                      linearSystem_;
   Nonlinear::Manager &                  nonlinearManager_;
   Device::DeviceMgr &                   deviceManager_;
-  Linear::Builder &                     builder_;
   Topo::Topology &                      topology_;
   IO::InitialConditionsManager &        initialConditionsManager_;
-  IO::RestartMgr &                      restartManager_;
   Parallel::Manager *                   pdsMgrPtr_;
-
+  AnalysisBase *                        currentAnalysisObject_;
+  Loader::HBLoader *                    hbLoaderPtr_; /// HB loader, builder, system, and DFT
+  Teuchos::RCP<Linear::HBBuilder>       hbBuilderPtr_;
+  Linear::Builder *                     builderPtr_;
+  Linear::System *                      hbLinearSystem_;
+  
   // HBNOISE specific parameters
   bool outputNodeSingle_;              // Flag for single output node
   std::string outputNode1_;            // First output node
@@ -116,8 +120,6 @@ private:
   double np_;                          // Number of points
   double fOffsetStart_;                // Start offset frequency for hbnoise analysis
   double fOffsetStop_;                 // Stop offset frequency for hbnoise analysis
-  double fAbsStart_;                   // Start offset frequency for hbnoise analysis
-  double fAbsStop_;                    // Stop offset frequency for hbnoise analysis
   double stepMult_;                    // Multiplier for frequency steps (DEC/OCT)
   double fstep_;                       // Step size for frequency (LIN)
   int pts_per_summary_;                // Points per summary
@@ -128,6 +130,30 @@ private:
   std::map< std::string, std::vector< std::vector<double> > > dataTablesMap_;  // Maps dataset name to parameter values
   Analysis::HB *hbAnalysis_;
 
+  // AC B-vectors
+  Linear::Vector * bVecRealPtr;
+  Linear::Vector * bVecImagPtr;
+
+  // NOISE B-vectors
+  Linear::Vector * bNoiseVecRealPtr;
+  Linear::Vector * bNoiseVecImagPtr;
+
+  int BlockCount_; // number of time points
+  int BlockSize_; // number of GIDs
+
+  //time domain matrices
+  std::vector<Teuchos::RCP<Linear::BlockVector> > Ct_;
+  std::vector<Teuchos::RCP<Linear::BlockVector> > Gt_;
+
+  //frequency domain matrices
+  std::vector<Teuchos::RCP<Linear::BlockVector> > Cf_;
+  std::vector<Teuchos::RCP<Linear::BlockVector> > Gf_;
+
+  double freq_;  // primary frequency from HB analysis
+  int                   size_;                  /// Problem Size: 2*harmonics+1
+  double                period_;                /// Periodicity Information
+  std::vector<double>                   times_;
+
   // hbnoise integrals are not calculated for DATA=<n> case if the
   // specified frequencies are not monotonically increasing
   bool calcNoiseIntegrals_;
@@ -136,9 +162,7 @@ private:
   Util::OptionBlock saved_lsOB_;
   Util::OptionBlock saved_timeIntOB_;
 
-  double freq_;  // Store primary frequency from HB analysis
-
-  int setupSweepParam_();
+  std::vector<Xyce::Analysis::NoiseData*> noiseDataVec_;
 };
 
 bool registerHBNOISEFactory(FactoryBlock &factory_block);

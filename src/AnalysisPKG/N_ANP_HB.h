@@ -183,7 +183,6 @@ private:
 
   bool createFT_(); 
 
-
   bool updateIFT_( std::vector<double>& tPoints);
   
   bool initializeOscOut( );
@@ -229,6 +228,8 @@ private:
 
   double                period_;                /// Periodicity Information
   double                relErrorTol_;
+
+  bool                  hbNoise_;      // used to load dae matrices
 
   // Number of fast time periods to integrate over and IGNORE before
   // getting initial conditions for HB.  Default is zero.
