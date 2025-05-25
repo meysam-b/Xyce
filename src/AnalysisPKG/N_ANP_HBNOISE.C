@@ -399,6 +399,96 @@ bool HBNOISE::doLoopProcess()
 // Creator       : Meysam Bahmanian
 // Creation Date : 5/22/2025
 //-----------------------------------------------------------------------------
+//                                Formulation in time domain
+//                     for AC system (with Einstein convention):
+// G_ij * v_j + C_ij * dv_j/dt = b_i
+// Now assume linear system with single-tone excitation:
+// v_j = V_jC*cos(w*t) - V_jS*sin(w*t)
+// b_j = B_jC*cos(w*t) - B_jS*sin(w*t)
+// where C means cos and S means sin.
+// Then we have:
+// G_ij * V_jC*cos(w*t) - G_ij * V_jS*sin(w*t) + C_ij * (-w*V_jC*sin(w*t) - w*V_jS*cos(w*t)) = B_iC*cos(w*t) - B_iS*sin(w*t)
+// This gives us the famous matrix equation:
+// G_ij * V_jC - w * C_ij * V_jS = B_iC
+// G_ij * V_jS + w * C_ij * V_jC = B_iS
+//-----------------------------------------------------------------------------
+//                     for Harmonic space system (with Einstein convention):
+// G_ij(t) = G_ij0 + G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) // sum over f
+// where f is the harmonic number, wc is the carrier frequency, I means in-phase and Q means quadrature.
+// The form of b_j now is
+// b_j = B_jC*cos(wm*t) - B_jS*sin(wm*t) + (B_jeCI*cos(wm*t) - B_jeSI*sin(wm*t))*cos(e*wc*t) - (B_jeCQ*cos(wm*t) - B_jeSQ*sin(wm*t))*sin(e*wc*t) // sum over e
+// The form of v_j now is
+// v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t))*cos(e*wc*t) - (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))*sin(e*wc*t) // sum over e
+// where e is the harmonic number, wc is the carrier frequency, I means in-phase and Q means quadrature.
+// where wm is the modulation frequency
+// Now we need to multiply G_ij(t) with v_j and equate it to b_j(t)
+// This gives us the Harmonic space matrix
+// instead of writing the matrix equation, we will write the contributions:
+// for all harmonics k, G_ij0 represennt the AC linear system without any frequency translation
+// All harmonics are linearly transformed
+// Now we have to find the contrinbutions of terms
+// [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * v_j
+//
+// a) The baseband terms: B_jC*cos(wm*t) - B_jS*sin(wm*t)
+// are directly transformed to d'th harmonic in-phase and quadrature components resuting the terms:
+// + G_ijfI*V_jC*cos(wm*t)*cos(f*wc*t) // f'th harmonic in-phase cosine term
+// - G_ijfI*V_jS*sin(wm*t)*cos(f*wc*t) // f'th harmonic in-phase sine term
+// - G_ijfQ*V_jC*cos(wm*t)*sin(f*wc*t) // f'th harmonic quadrature cosine term
+// + G_ijfQ*V_jS*sin(wm*t)*sin(f*wc*t) // f'th harmonic quadrature sine term
+//
+// b) equal harmonic mixing terms (e=f): 
+// [G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t)] * [(V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t))*cos(e*wc*t) - (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))*sin(e*wc*t)]
+// This generate 2 baseband terms and 4 harmonic terms at f'th (or e'th) harmonic.
+// The overal baseband terms are:
+// + 0.5 * G_ijfI * (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t)) + 0.5 * G_ijfQ * (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))
+// So the baseband terms are:
+// + 0.5 * G_ijfI * V_jeCI*cos(wm*t) + 0.5 * G_ijfQ * V_jeCQ*cos(wm*t) // cosine term
+// - 0.5 * G_ijfI * V_jeSI*sin(wm*t) - 0.5 * G_ijfQ * V_jeSQ*sin(wm*t) // sine term
+// The overal in-phase terms are:
+// [ + 0.5 * G_ijfI * (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t)) - 0.5 * G_ijfQ * (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t)) ] * cos(2*e*wc*t)
+// The overal quadrature terms are:
+// [ - 0.5 * G_ijfI * (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t)) - 0.5 * G_ijfQ * (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t)) ] * sin(2*e*wc*t)
+// So the 2*e'th (2*f'th) harmonic terms are:
+// [ + 0.5 * G_ijfI * V_jeCI - 0.5 * G_ijfQ * V_jeCQ ] * cos(wm*t) * cos(2*e*wc*t) // 2*e'th harmonic in-phase cosine term
+// [ - 0.5 * G_ijfI * V_jeSI + 0.5 * G_ijfQ * V_jeSQ ] * sin(wm*t) * cos(2*e*wc*t) // 2*e'th harmonic in-phase sine term
+// [ - 0.5 * G_ijfI * V_jeCQ - 0.5 * G_ijfQ * V_jeCI ] * cos(wm*t) * sin(2*e*wc*t) // 2*e'th harmonic quadrature cosine term
+// [ + 0.5 * G_ijfI * V_jeSQ + 0.5 * G_ijfQ * V_jeSI ] * sin(wm*t) * sin(2*e*wc*t) // 2*e'th harmonic quadrature sine term
+
+// b) non-equal harmonic mixing terms (e!=d):
+// [G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t)] * [(V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t))*cos(e*wc*t) - (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))*sin(e*wc*t)]
+// This gives us 4 terms at delta=f-e and another 4 terms at sigma=f+e
+// delta'th harmonic terms:
+// [ + 0.5 * G_ijfI * V_jeCI + 0.5 * G_ijfQ * V_jeCQ ] * cos(wm*t) * cos(delta*wc*t) // delta'th harmonic in-phase cosine term
+// [ - 0.5 * G_ijfI * V_jeSI - 0.5 * G_ijfQ * V_jeSQ ] * sin(wm*t) * cos(delta*wc*t) // delta'th harmonic in-phase sine term
+// [ + 0.5 * G_ijfI * V_jeCQ - 0.5 * G_ijfQ * V_jeCI ] * cos(wm*t) * sin(delta*wc*t) // delta'th harmonic quadrature cosine term
+// [ - 0.5 * G_ijfI * V_jeSQ + 0.5 * G_ijfQ * V_jeSI ] * sin(wm*t) * sin(delta*wc*t) // delta'th harmonic quadrature sine term
+// sigma'th harmonic terms:
+// [ + 0.5 * G_ijfI * V_jeCI - 0.5 * G_ijfQ * V_jeCQ ] * cos(wm*t) * cos(sigma*wc*t) // sigma'th harmonic in-phase cosine term
+// [ - 0.5 * G_ijfI * V_jeSI + 0.5 * G_ijfQ * V_jeSQ ] * sin(wm*t) * cos(sigma*wc*t) // sigma'th harmonic in-phase sine term
+// [ - 0.5 * G_ijfI * V_jeCQ - 0.5 * G_ijfQ * V_jeCI ] * cos(wm*t) * sin(sigma*wc*t) // sigma'th harmonic quadrature cosine term
+// [ + 0.5 * G_ijfI * V_jeSQ + 0.5 * G_ijfQ * V_jeSI ] * sin(wm*t) * sin(sigma*wc*t) // sigma'th harmonic quadrature sine term
+// You may wonder what is the beneffit of sine and cosine terms in the above equations.
+// They show their significance when we have caps (surprisingly, even linear caps), these terms model the transfer functions in harmonic space.
+
+// Now let's find the caps contribution
+// we need to first correct our interpretation of the caps
+// i = d/dt( C(t) * v(t) ) // this can also be shown that is true for small signal v(t). But let's accept it for now, I don't want to prove it here.
+// i = dC(t)/dt * v(t) + C(t) * dv/dt
+// So dC(t)/dt acts similar to conductance matrix and should be summed to G
+// We simply multiply each Cf_ with its frequency. 
+// Let's focus on C(t) * dv/dt
+// for C we have:
+// C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) // sum over f
+// v_j(t) has the form of
+// v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t))*cos(e*wc*t) - (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))*sin(e*wc*t) // sum over e
+// we divide the derivative in 2 parts, one that scales with wm and one that scales with wc
+// the wm part is offset freq and has to be swept in a loop and has to be evaluated for every loop iteration
+// PART 1:
+// dv_j/dt |1 = - wm*V_jC*sin(wm*t) - wm*V_jS*cos(wm*t) + wm * ( - V_jeCI*sin(wm*t) - V_jeSI*cos(wm*t) )*cos(e*wc*t) - wm * ( - V_jeCQ*sin(wm*t) - V_jeSQ*cos(wm*t))*sin(e*wc*t) 
+// PART 2:
+// dv_j/dt |2 = - ( V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t) )*e*wc*sin(e*wc*t) + ( V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t) )*e*wc*cos(e*wc*t)
+
+
 bool HBNOISE::createHarmonicSpaceLinearSystem_(){
   // first take the Fourier Transform of Ct_ and Gt_
   for (int i=0; i<BlockSize_; i++){
@@ -424,6 +514,34 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
     //}
   }
 
+  Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
+
+  RCP<Parallel::ParMap> baseMap = rcp(pds_manager.getParallelMap( Parallel::SOLUTION ), false);
+  const Linear::Graph* baseFullGraph = pds_manager.getMatrixGraph(Parallel::JACOBIAN);
+
+  int numHarms = (size_-1)/2;
+  int numBlocks = 2 + 4 * numHarms; 
+  int offset = baseMap->maxGlobalEntity() + 1;  // Use this offset to create a contiguous gid map for direct solvers.
+
+  RCP<Parallel::ParMap> blockMap = Linear::createBlockParMap(numBlocks, *baseMap, 0, 0, offset);
+  HarmonicSpaceB_ = Xyce::Linear::createBlockVector(numBlocks, blockMap, baseMap);
+
+  std::vector<std::vector<int> > blockPattern(numBlocks);
+  for (int i=0; i<numBlocks; i++){
+    blockPattern[i].resize(numBlocks);
+    for (int j=0; j<numBlocks; j++){
+      blockPattern[i][j] = j;
+    }
+  }
+
+  RCP<Linear::Graph> blockGraph = Linear::createBlockGraph( offset, blockPattern, *blockMap, *baseFullGraph);
+  HarmonicSpaceMatrix_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+
+  HarmonicSpaceMatrix_->put( 0.0 ); // Zero out whole matrix.
+
+  HarmonicSpaceB_->putScalar( 0.0 );
+  HarmonicSpaceB_->block( 0 ).update( 1.0, *bVecRealPtr);
+  HarmonicSpaceB_->block( 1 ).update( 1.0, *bVecImagPtr);
 
 
   // now take the Fourier Transform of Ct_ and Gt_

@@ -149,6 +149,11 @@ private:
   std::vector<Teuchos::RCP<Linear::BlockVector> > Cf_;
   std::vector<Teuchos::RCP<Linear::BlockVector> > Gf_;
 
+  Linear::BlockMatrix *           HarmonicSpaceMatrix_;
+  Linear::BlockVector *           HarmonicSpaceB_;
+  Linear::BlockVector *           HarmonicSpaceX_;
+  Linear::BlockVector *           HarmonicSpace_SavedX_;
+
   double freq_;  // primary frequency from HB analysis
   int                   size_;                  /// Problem Size: 2*harmonics+1
   double                period_;                /// Periodicity Information
