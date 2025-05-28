@@ -138,9 +138,6 @@ private:
   Linear::Vector * bNoiseVecRealPtr;
   Linear::Vector * bNoiseVecImagPtr;
 
-  int BlockCount_; // number of time points
-  int BlockSize_; // number of GIDs
-
   //time domain matrices
   std::vector<Teuchos::RCP<Linear::BlockVector> > Ct_;
   std::vector<Teuchos::RCP<Linear::BlockVector> > Gt_;
@@ -149,14 +146,19 @@ private:
   std::vector<Teuchos::RCP<Linear::BlockVector> > Cf_;
   std::vector<Teuchos::RCP<Linear::BlockVector> > Gf_;
 
-  Linear::BlockMatrix *           HarmonicSpaceMatrix_;
-  Linear::BlockVector *           HarmonicSpaceB_;
-  Linear::BlockVector *           HarmonicSpaceX_;
-  Linear::BlockVector *           HarmonicSpace_SavedX_;
+  Linear::BlockMatrix *           harmonicSpaceMatrix_;
+  Linear::BlockMatrix *           harmonicSpaceMatrix_G_; //conductance matrix
+  Linear::BlockMatrix *           harmonicSpaceMatrix_omegaC_0_; // PART 0: dC(t)/dt
+  Linear::BlockMatrix *           harmonicSpaceMatrix_omegaC_1_; // PART 1: carrier derivative 
+  Linear::BlockMatrix *           harmonicSpaceMatrix_C_2_;   // PART 2: baseband/in-phase/quadrature components derivative
+  Linear::BlockVector *           harmonicSpaceB_;
+  Linear::BlockVector *           harmonicSpaceX_;
+  Linear::BlockVector *           harmonicSpace_SavedX_;
 
-  double freq_;  // primary frequency from HB analysis
-  int                   size_;                  /// Problem Size: 2*harmonics+1
-  double                period_;                /// Periodicity Information
+  double freq_;                                                 // primary frequency from HB analysis
+  double omega_;                                                // primary angular frequency (2*pi*freq_) from HB analysis
+  int                   size_;                                  // Problem Size: 2*harmonics+1
+  double                period_;                                // Periodicity Information
   std::vector<double>                   times_;
 
   // hbnoise integrals are not calculated for DATA=<n> case if the

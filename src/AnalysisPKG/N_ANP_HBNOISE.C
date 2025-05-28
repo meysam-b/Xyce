@@ -272,6 +272,7 @@ bool HBNOISE::doInit()
   // get the frequency from the HB analysis
   size_ = hbAnalysis_->size_;
   freq_ = freqs[0];
+  omega_ = 2.0*M_PI*freq_;
   period_ = 1.0/freq_;
   times_.resize(size_);
   for( int i = 0; i < size_; ++i )
@@ -416,9 +417,9 @@ bool HBNOISE::doLoopProcess()
 // G_ij(t) = G_ij0 + G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) // sum over f
 // where f is the harmonic number, wc is the carrier frequency, I means in-phase and Q means quadrature.
 // The form of b_j now is
-// b_j = B_jC*cos(wm*t) - B_jS*sin(wm*t) + (B_jeCI*cos(wm*t) - B_jeSI*sin(wm*t))*cos(e*wc*t) - (B_jeCQ*cos(wm*t) - B_jeSQ*sin(wm*t))*sin(e*wc*t) // sum over e
+// b_j = B_jC*cos(wm*t) - B_jS*sin(wm*t) + (B_jeIC*cos(wm*t) - B_jeIS*sin(wm*t))*cos(e*wc*t) - (B_jeQC*cos(wm*t) - B_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
 // The form of v_j now is
-// v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t))*cos(e*wc*t) - (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))*sin(e*wc*t) // sum over e
+// v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
 // where e is the harmonic number, wc is the carrier frequency, I means in-phase and Q means quadrature.
 // where wm is the modulation frequency
 // Now we need to multiply G_ij(t) with v_j and equate it to b_j(t)
@@ -430,68 +431,77 @@ bool HBNOISE::doLoopProcess()
 // [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * v_j
 //
 // a) The baseband terms: B_jC*cos(wm*t) - B_jS*sin(wm*t)
-// are directly transformed to d'th harmonic in-phase and quadrature components resuting the terms:
+// are directly transformed to f'th harmonic in-phase and quadrature components resulting the terms:
 // + G_ijfI*V_jC*cos(wm*t)*cos(f*wc*t) // f'th harmonic in-phase cosine term
 // - G_ijfI*V_jS*sin(wm*t)*cos(f*wc*t) // f'th harmonic in-phase sine term
 // - G_ijfQ*V_jC*cos(wm*t)*sin(f*wc*t) // f'th harmonic quadrature cosine term
 // + G_ijfQ*V_jS*sin(wm*t)*sin(f*wc*t) // f'th harmonic quadrature sine term
 //
 // b) equal harmonic mixing terms (e=f): 
-// [G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t)] * [(V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t))*cos(e*wc*t) - (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))*sin(e*wc*t)]
+// [G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t)] * [(V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t)]
 // This generate 2 baseband terms and 4 harmonic terms at f'th (or e'th) harmonic.
 // The overal baseband terms are:
-// + 0.5 * G_ijfI * (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t)) + 0.5 * G_ijfQ * (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))
+// + 0.5 * G_ijfI * (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t)) + 0.5 * G_ijfQ * (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))
 // So the baseband terms are:
-// + 0.5 * G_ijfI * V_jeCI*cos(wm*t) + 0.5 * G_ijfQ * V_jeCQ*cos(wm*t) // cosine term
-// - 0.5 * G_ijfI * V_jeSI*sin(wm*t) - 0.5 * G_ijfQ * V_jeSQ*sin(wm*t) // sine term
+// + 0.5 * G_ijfI * V_jeIC*cos(wm*t) + 0.5 * G_ijfQ * V_jeQC*cos(wm*t) // cosine term
+// - 0.5 * G_ijfI * V_jeIS*sin(wm*t) - 0.5 * G_ijfQ * V_jeQS*sin(wm*t) // sine term
 // The overal in-phase terms are:
-// [ + 0.5 * G_ijfI * (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t)) - 0.5 * G_ijfQ * (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t)) ] * cos(2*e*wc*t)
+// [ + 0.5 * G_ijfI * (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t)) - 0.5 * G_ijfQ * (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t)) ] * cos(2*e*wc*t)
 // The overal quadrature terms are:
-// [ - 0.5 * G_ijfI * (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t)) - 0.5 * G_ijfQ * (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t)) ] * sin(2*e*wc*t)
+// [ - 0.5 * G_ijfI * (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t)) - 0.5 * G_ijfQ * (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t)) ] * sin(2*e*wc*t)
 // So the 2*e'th (2*f'th) harmonic terms are:
-// [ + 0.5 * G_ijfI * V_jeCI - 0.5 * G_ijfQ * V_jeCQ ] * cos(wm*t) * cos(2*e*wc*t) // 2*e'th harmonic in-phase cosine term
-// [ - 0.5 * G_ijfI * V_jeSI + 0.5 * G_ijfQ * V_jeSQ ] * sin(wm*t) * cos(2*e*wc*t) // 2*e'th harmonic in-phase sine term
-// [ - 0.5 * G_ijfI * V_jeCQ - 0.5 * G_ijfQ * V_jeCI ] * cos(wm*t) * sin(2*e*wc*t) // 2*e'th harmonic quadrature cosine term
-// [ + 0.5 * G_ijfI * V_jeSQ + 0.5 * G_ijfQ * V_jeSI ] * sin(wm*t) * sin(2*e*wc*t) // 2*e'th harmonic quadrature sine term
+// [ + 0.5 * G_ijfI * V_jeIC - 0.5 * G_ijfQ * V_jeQC ] * cos(wm*t) * cos(2*e*wc*t) // 2*e'th harmonic in-phase cosine term
+// [ - 0.5 * G_ijfI * V_jeIS + 0.5 * G_ijfQ * V_jeQS ] * sin(wm*t) * cos(2*e*wc*t) // 2*e'th harmonic in-phase sine term
+// [ - 0.5 * G_ijfI * V_jeQC - 0.5 * G_ijfQ * V_jeIC ] * cos(wm*t) * sin(2*e*wc*t) // 2*e'th harmonic quadrature cosine term
+// [ + 0.5 * G_ijfI * V_jeQS + 0.5 * G_ijfQ * V_jeIS ] * sin(wm*t) * sin(2*e*wc*t) // 2*e'th harmonic quadrature sine term
 
-// b) non-equal harmonic mixing terms (e!=d):
-// [G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t)] * [(V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t))*cos(e*wc*t) - (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))*sin(e*wc*t)]
+// b) non-equal harmonic mixing terms (e!=f):
+// [G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t)] * [(V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t)]
 // This gives us 4 terms at delta=f-e and another 4 terms at sigma=f+e
 // delta'th harmonic terms:
-// [ + 0.5 * G_ijfI * V_jeCI + 0.5 * G_ijfQ * V_jeCQ ] * cos(wm*t) * cos(delta*wc*t) // delta'th harmonic in-phase cosine term
-// [ - 0.5 * G_ijfI * V_jeSI - 0.5 * G_ijfQ * V_jeSQ ] * sin(wm*t) * cos(delta*wc*t) // delta'th harmonic in-phase sine term
-// [ + 0.5 * G_ijfI * V_jeCQ - 0.5 * G_ijfQ * V_jeCI ] * cos(wm*t) * sin(delta*wc*t) // delta'th harmonic quadrature cosine term
-// [ - 0.5 * G_ijfI * V_jeSQ + 0.5 * G_ijfQ * V_jeSI ] * sin(wm*t) * sin(delta*wc*t) // delta'th harmonic quadrature sine term
+// [ + 0.5 * G_ijfI * V_jeIC + 0.5 * G_ijfQ * V_jeQC ] * cos(wm*t) * cos(delta*wc*t) // delta'th harmonic in-phase cosine term
+// [ - 0.5 * G_ijfI * V_jeIS - 0.5 * G_ijfQ * V_jeQS ] * sin(wm*t) * cos(delta*wc*t) // delta'th harmonic in-phase sine term
+// [ + 0.5 * G_ijfI * V_jeQC - 0.5 * G_ijfQ * V_jeIC ] * cos(wm*t) * sin(delta*wc*t) // delta'th harmonic quadrature cosine term
+// [ - 0.5 * G_ijfI * V_jeQS + 0.5 * G_ijfQ * V_jeIS ] * sin(wm*t) * sin(delta*wc*t) // delta'th harmonic quadrature sine term
 // sigma'th harmonic terms:
-// [ + 0.5 * G_ijfI * V_jeCI - 0.5 * G_ijfQ * V_jeCQ ] * cos(wm*t) * cos(sigma*wc*t) // sigma'th harmonic in-phase cosine term
-// [ - 0.5 * G_ijfI * V_jeSI + 0.5 * G_ijfQ * V_jeSQ ] * sin(wm*t) * cos(sigma*wc*t) // sigma'th harmonic in-phase sine term
-// [ - 0.5 * G_ijfI * V_jeCQ - 0.5 * G_ijfQ * V_jeCI ] * cos(wm*t) * sin(sigma*wc*t) // sigma'th harmonic quadrature cosine term
-// [ + 0.5 * G_ijfI * V_jeSQ + 0.5 * G_ijfQ * V_jeSI ] * sin(wm*t) * sin(sigma*wc*t) // sigma'th harmonic quadrature sine term
-// You may wonder what is the beneffit of sine and cosine terms in the above equations.
+// [ + 0.5 * G_ijfI * V_jeIC - 0.5 * G_ijfQ * V_jeQC ] * cos(wm*t) * cos(sigma*wc*t) // sigma'th harmonic in-phase cosine term
+// [ - 0.5 * G_ijfI * V_jeIS + 0.5 * G_ijfQ * V_jeQS ] * sin(wm*t) * cos(sigma*wc*t) // sigma'th harmonic in-phase sine term
+// [ - 0.5 * G_ijfI * V_jeQC - 0.5 * G_ijfQ * V_jeIC ] * cos(wm*t) * sin(sigma*wc*t) // sigma'th harmonic quadrature cosine term
+// [ + 0.5 * G_ijfI * V_jeQS + 0.5 * G_ijfQ * V_jeIS ] * sin(wm*t) * sin(sigma*wc*t) // sigma'th harmonic quadrature sine term
+// You may wonder what is the benefit of sine and cosine terms in the above equations.
 // They show their significance when we have caps (surprisingly, even linear caps), these terms model the transfer functions in harmonic space.
 
 // Now let's find the caps contribution
 // we need to first correct our interpretation of the caps
 // i = d/dt( C(t) * v(t) ) // this can also be shown that is true for small signal v(t). But let's accept it for now, I don't want to prove it here.
 // i = dC(t)/dt * v(t) + C(t) * dv/dt
-// So dC(t)/dt acts similar to conductance matrix and should be summed to G
-// We simply multiply each Cf_ with its frequency. 
-// Let's focus on C(t) * dv/dt
+// So dC(t)/dt acts similar to conductance matrix and be added to G
+// I call dC(t)/dt PART 0
+// We simply multiply each Cf_ with its frequency. (see details in PART 0 below)
+// Let's focus on other parts genereated by C(t) * dv/dt
 // for C we have:
 // C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) // sum over f
 // v_j(t) has the form of
-// v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t))*cos(e*wc*t) - (V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t))*sin(e*wc*t) // sum over e
+// v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
 // we divide the derivative in 2 parts, one that scales with wm and one that scales with wc
 // the wm part is offset freq and has to be swept in a loop and has to be evaluated for every loop iteration
-// PART 1:
-// dv_j/dt |1 = - wm*V_jC*sin(wm*t) - wm*V_jS*cos(wm*t) + wm * ( - V_jeCI*sin(wm*t) - V_jeSI*cos(wm*t) )*cos(e*wc*t) - wm * ( - V_jeCQ*sin(wm*t) - V_jeSQ*cos(wm*t))*sin(e*wc*t) 
-// PART 2:
-// dv_j/dt |2 = - ( V_jeCI*cos(wm*t) - V_jeSI*sin(wm*t) )*e*wc*sin(e*wc*t) + ( V_jeCQ*cos(wm*t) - V_jeSQ*sin(wm*t) )*e*wc*cos(e*wc*t)
+// PART 1 scales with wc and performs cross-harmonic quadrature transformation:
+// dv_j/dt |1 = - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*e*wc*sin(e*wc*t) - ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*e*wc*cos(e*wc*t)
+// PART 2 scales with wm and performs coss-harmonic shaping:
+// dv_j/dt |2 = - wm*V_jC*sin(wm*t) - wm*V_jS*cos(wm*t) + wm * ( - V_jeIC*sin(wm*t) - V_jeIS*cos(wm*t) )*cos(e*wc*t) - wm * ( - V_jeQC*sin(wm*t) - V_jeQS*cos(wm*t))*sin(e*wc*t) 
+
+// This approach gives us the desired format:
+// ( [G] + [omega*C, PART 0] + [omega*C, PART 1] + wm*[C, PART 2] ) * v = b
+// The matrices will be calculated once, of for each offset frequency PART 2 will be scaled with wm and added to the matrix.
 
 
 bool HBNOISE::createHarmonicSpaceLinearSystem_(){
   // first take the Fourier Transform of Ct_ and Gt_
-  for (int i=0; i<BlockSize_; i++){
+
+  int BlockCount = Ct_[0]->blockCount(); // number of time points
+  int BlockSize = Ct_[0]->blockSize(); // number of GIDs
+
+  for (int i=0; i<BlockSize; i++){
     Cf_.push_back(hbBuilderPtr_->createExpandedRealFormTransposeBlockVector());
     Gf_.push_back(hbBuilderPtr_->createExpandedRealFormTransposeBlockVector());
     Cf_[i]->putScalar(0.0);
@@ -502,7 +512,7 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
   if (DEBUG_HBNOISE)
   {
     Xyce::dout() << "Reporting Gf_ Matrices, each block is a node" << std::endl;
-    for (int i=0; i<BlockSize_; i++){
+    for (int i=0; i<BlockSize; i++){
       Xyce::dout() << "Gf_[" << i << "]: " << std::endl;
       Gf_[i]->print(Xyce::dout());
       Xyce::dout() << std::endl;
@@ -520,11 +530,11 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
   const Linear::Graph* baseFullGraph = pds_manager.getMatrixGraph(Parallel::JACOBIAN);
 
   int numHarms = (size_-1)/2;
-  int numBlocks = 2 + 4 * numHarms; 
+  int numBlocks = 2 + 4 * numHarms; // 2 is for our old AC part (real/imag) and every harmonic has 4 terms (real/imag in-phase and real/imag quadrature)
   int offset = baseMap->maxGlobalEntity() + 1;  // Use this offset to create a contiguous gid map for direct solvers.
 
   RCP<Parallel::ParMap> blockMap = Linear::createBlockParMap(numBlocks, *baseMap, 0, 0, offset);
-  HarmonicSpaceB_ = Xyce::Linear::createBlockVector(numBlocks, blockMap, baseMap);
+  harmonicSpaceB_ = Xyce::Linear::createBlockVector(numBlocks, blockMap, baseMap);
 
   std::vector<std::vector<int> > blockPattern(numBlocks);
   for (int i=0; i<numBlocks; i++){
@@ -535,13 +545,629 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
   }
 
   RCP<Linear::Graph> blockGraph = Linear::createBlockGraph( offset, blockPattern, *blockMap, *baseFullGraph);
-  HarmonicSpaceMatrix_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceMatrix_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceMatrix_->put( 0.0 ); 
 
-  HarmonicSpaceMatrix_->put( 0.0 ); // Zero out whole matrix.
+  // I currently do it in a loop iteration. But I think it will be easier using tensors. Fourier transform of G_
+  // is a tensor of rank 3. We can use a tranformation tensor to get the harmonic space G matrix.
+  // Ct_ is also a tensor:
+  //
+  //     Gt_ (or Ct_) tensor            Fourier matrix             Gf_ (or Cf_) tensor    
+  //
+  //           ---------|                 \    /                        \-------\           
+  //  time->  /       / |          freq->  \  / <-time                  |\       \  <-freq
+  //         /-------/  |    *              \/             =            \ \-------\  
+  //  node-> | Ct/Gt | /                                         node->  \| Cf/Gf |   
+  //         |-------|/                                                   \-------|   
+  //             ^                                                            ^        
+  //           node                                                          node       
+  //
+  // I think an interesting approach would be to find a way to transform the Gf_ tensor to a flat matrix for the harmonic space.
+  // If we properly write the upper and lower rank indices, we have:
+  // Gf_{jkf} : j,k are members of {0-N}, f is member of {0-numHarms}, where N = GIDmax
+  // G_{j'k'} : j',k' are members of {0-N'} where N'=GIDmax*(2+4*numHarms)
+  // From a purely mathematical point of view, it would be interesting to find the form of harmonic space tranformation tensor, HST:
+  // HST_{j',k'}^{j,k,f}
+  // which has lower rank of 2 and upper rank of 3. Multiplying Gf tensor with HST tensor directly gives harmonic space matrix
+  // The elements of HST are most likey just 0, +-1, +-0.5 but this requires further formulation.
 
-  HarmonicSpaceB_->putScalar( 0.0 );
-  HarmonicSpaceB_->block( 0 ).update( 1.0, *bVecRealPtr);
-  HarmonicSpaceB_->block( 1 ).update( 1.0, *bVecImagPtr);
+  // Let's start with G matrix, it is easier!
+  // Gf_ strucure: std::vector with GID elements, each element has GID blocks, each block has real/imag freq points
+  // the frequency points are in total 2*size_ = 2 * (2*numberOfHarmonics + 1)
+  // 0: dc real
+  // 1: dc imag
+  // 2: 1st harmonic real 
+  // 3: 1st harmonic imag etc.
+
+  // Harmonic space structure:
+  // TBD
+  // 
+  harmonicSpaceMatrix_G_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceMatrix_G_->put( 0.0 );
+  int numRows = Gf_.size();
+
+  for (int i=0; i<numRows; i++)
+  { // selectring a row of G Matrix
+    for (int j=0; j<numRows; j++)
+    { // selecting a column of G Matrix
+      for (int f=0; f<=numHarms; f++)
+      { // selecting a frequency point of Gf_
+        // now we fill the matrix
+        // first the diagon of G matrix
+        if (f==0)
+        { // linear transformation
+          for (int l=0; l<numBlocks; l++){
+            harmonicSpaceMatrix_G_->block(l,l)[i][j] = Gf_[i]->block(j)[0];
+          }
+        } else
+        { // now the mixing parts (harmonic coupling)
+          for (int e=0; e<=numHarms; e++)
+          { // harmonic index of v
+            if (e==0) 
+            {
+              // Maybe I should have made two dummy blocks for baseband so the k-indices were not so confusing!
+              // baseband modulation
+              // [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ V_jC*cos(wm*t) - V_jS*sin(wm*t) ]
+
+              // + G_ijfI*cos(f*wc*t) * V_jC*cos(wm*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_G_->block(4*f-2,0)[i][j] = +2*Gf_[i]->block(j)[2*f]; // in-phase cosine
+
+              // - G_ijfI*cos(f*wc*t) * V_jS*sin(wm*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_G_->block(4*f-1,0)[i][j] = +2*Gf_[i]->block(j)[2*f]; // in-phase sine
+
+              // - G_ijfQ*sin(f*wc*t) * V_jC*cos(wm*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_G_->block(4*f  ,0)[i][j] = -2*Gf_[i]->block(j)[2*f+1]; // quadrature cosine
+
+              // + G_ijfQ*sin(f*wc*t) * V_jS*sin(wm*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_G_->block(4*f+1,0)[i][j] = -2*Gf_[i]->block(j)[2*f+1]; // quadrature sine
+            } else 
+            { // now f>0 and e>0
+              // [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) ]
+              int sigma = f+e;
+              // int delta = f-e; this line is just for the sake of understanding the code. Equations are with reference to delta, not deltaAbs.
+              int deltaAbs = std::abs(f-e);
+              int sign = f>=e ? 1 : -1;
+
+              // case sigma
+              if (sigma<=numHarms) 
+              { // f+e should not be larget than numHarms, otherwise ignore it
+                // in finite-harmonics space the system stil shows nonlineary and some mixing products have to be ignored
+
+                // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
+                // + 0.5*G_ijfI*cos(sigma*wc*t) * V_jeIC*cos(wm*t) - 0.5*G_ijfQ*cos(sigma*wc*t) * V_jeQC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_G_->block(4*sigma-2, 4*e-2)[i][j] = +Gf_[i]->block(j)[2*f  ]; // in-phase cosine translated from in-phase cosine by in-phase G
+                harmonicSpaceMatrix_G_->block(4*sigma-2, 4*e  )[i][j] = -Gf_[i]->block(j)[2*f+1]; // in-phase cosine translated from quadrature cosine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*G_ijfI*cos(sigma*wc*t) * V_jeIS*sin(wm*t) + 0.5*G_ijfQ*cos(sigma*wc*t) * V_jeQS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_G_->block(4*sigma-1,4*e-1)[i][j] = +Gf_[i]->block(j)[2*f  ]; // in-phase sine translated from in-phase sine by in-phase G
+                harmonicSpaceMatrix_G_->block(4*sigma-1,4*e+1)[i][j] = -Gf_[i]->block(j)[2*f+1]; // in-phase sine translated from quadrature sine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t)
+                // - 0.5*G_ijfI*sin(sigma*wc*t) * V_jeQC*cos(wm*t) - 0.5*G_ijfQ*sin(sigma*wc*t) * V_jeIC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_G_->block(4*sigma  ,4*e  )[i][j] = -Gf_[i]->block(j)[2*f  ]; // quadrature cosine translated from quadrature cosine by in-phase G
+                harmonicSpaceMatrix_G_->block(4*sigma  ,4*e-2)[i][j] = -Gf_[i]->block(j)[2*f+1]; // quadrature cosine translated from in-phase cosine by quadrature G
+
+                // + G_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t)
+                // + 0.5*G_ijfI*sin(sigma*wc*t) * V_jeQS*sin(wm*t) + 0.5*G_ijfQ*sin(sigma*wc*t) * V_jeIS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_G_->block(4*sigma+1,4*e+1)[i][j] = -Gf_[i]->block(j)[2*f  ]; // quadrature sine translated from quadrature sine by in-phase G
+                harmonicSpaceMatrix_G_->block(4*sigma+1,4*e-1)[i][j] = -Gf_[i]->block(j)[2*f+1]; // quadrature sine translated from in-phase sine by quadrature G
+              }
+
+              // case delta
+              // now I have to deal with the index issue! if delta==0 then the indices become negative!
+              if (deltaAbs==0)
+              {
+                // translation from harmonics to baseband
+                // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
+                // + 0.5*G_ijfI * V_jeIC*cos(wm*t) + 0.5*G_ijfQ * V_jeQC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_G_->block(0, 4*e-2)[i][j] = +Gf_[i]->block(j)[2*f  ]; // baseband cosine translated from in-phase cosine by in-phase G
+                harmonicSpaceMatrix_G_->block(1, 4*e  )[i][j] = +Gf_[i]->block(j)[2*f+1]; // baseband cosine translated from quadrature cosine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*G_ijfI * V_jeIS*sin(wm*t) - 0.5*G_ijfQ * V_jeQS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_G_->block(0, 4*e-1)[i][j] = +Gf_[i]->block(j)[2*f  ]; // baseband sine translated from in-phase sine by in-phase G
+                harmonicSpaceMatrix_G_->block(1, 4*e+1)[i][j] = +Gf_[i]->block(j)[2*f+1]; // baseband sine translated from quadrature sine by quadrature G
+              }
+              else
+              {
+                // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
+                // + 0.5*G_ijfI*cos(delta*wc*t) * V_jeIC*cos(wm*t) + 0.5*G_ijfQ*cos(delta*wc*t) * V_jeQC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_G_->block(4*deltaAbs-2, 4*e-2)[i][j] = +Gf_[i]->block(j)[2*f  ]; // in-phase cosine translated from in-phase cosine by in-phase G
+                harmonicSpaceMatrix_G_->block(4*deltaAbs-2, 4*e  )[i][j] = +Gf_[i]->block(j)[2*f+1]; // in-phase cosine translated from quadrature cosine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*G_ijfI*cos(delta*wc*t) * V_jeIS*sin(wm*t) - 0.5*G_ijfQ*cos(delta*wc*t) * V_jeQS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_G_->block(4*deltaAbs-1,4*e-1)[i][j] = +Gf_[i]->block(j)[2*f  ]; // in-phase sine translated from in-phase sine by in-phase G
+                harmonicSpaceMatrix_G_->block(4*deltaAbs-1,4*e+1)[i][j] = +Gf_[i]->block(j)[2*f+1]; // in-phase sine translated from quadrature sine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t)
+                // + 0.5*G_ijfI*sin(delta*wc*t) * V_jeQC*cos(wm*t) - 0.5*G_ijfQ*sin(delta*wc*t) * V_jeIC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_G_->block(4*deltaAbs  ,4*e  )[i][j] = +sign*Gf_[i]->block(j)[2*f  ]; // quadrature cosine translated from quadrature cosine by in-phase G
+                harmonicSpaceMatrix_G_->block(4*deltaAbs  ,4*e-2)[i][j] = -sign*Gf_[i]->block(j)[2*f+1]; // quadrature cosine translated from in-phase cosine by quadrature G
+
+                // + G_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t)
+                // - 0.5*G_ijfI*sin(delta*wc*t) * V_jeQS*sin(wm*t) + 0.5*G_ijfQ*sin(delta*wc*t) * V_jeIS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_G_->block(4*deltaAbs+1,4*e+1)[i][j] = +sign*Gf_[i]->block(j)[2*f  ]; // quadrature sine translated from quadrature sine by in-phase G
+                harmonicSpaceMatrix_G_->block(4*deltaAbs+1,4*e-1)[i][j] = -sign*Gf_[i]->block(j)[2*f+1]; // quadrature sine translated from in-phase sine by quadrature G
+
+              }
+            } // end of f>0 and e>0
+          } // end of e loop
+        } // end of f!=0
+      } // end of f loop of Gf_
+    } // end of column loop
+  } // end of row loop
+  // And this was just for G matrix. Now we have to do the same for three parts of C matrix and we have to deal with derivatives too!
+  
+  // **************************************************
+  //           C Matrix PART 0: dC(t)/dt
+  // **************************************************
+  // This part behaves like G matrix. We just need to use time-derivative of C matrix instead of G matrix.
+  // We do the time-derivative in frequency domain.
+  // we have
+  // C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t)            // sum over f
+  // dC_ij(t)/dt = - f*wc*C_ijfQ*cos(f*wc*t) - f*wc*C_ijfI*sin(f*wc*t)     // sum over f
+  // So I have to the same thing as G, but use 
+  // Gf_[i]->block(j)[2*f  ] -> -f*wc*Cf_[i]->block(j)[2*f+1]
+  // Gf_[i]->block(j)[2*f+1] -> +f*wc*Cf_[i]->block(j)[2*f  ]
+  // The only good news is that the linear transformation is now zero (well, I mean that tiny loop!)
+  harmonicSpaceMatrix_omegaC_0_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceMatrix_omegaC_0_->put( 0.0 );
+
+  for (int i=0; i<numRows; i++)
+  { // selectring a row of G Matrix
+    for (int j=0; j<numRows; j++)
+    { // selecting a column of G Matrix
+      for (int f=0; f<=numHarms; f++)
+      { // selecting a frequency point of Gf_
+        // now we fill the matrix
+        // first the diagon of omega*C matrix
+        if (f==0)
+        { // linear transformation
+          // these terms are zero for dC(t)/dt
+          // for (int l=0; l<numBlocks; l++){
+          //   harmonicSpaceMatrix_omegaC0_->block(l,l)[i][j] = 0*Cf_[i]->block(j)[0];
+          // }
+        } else
+        { // now the mixing parts (harmonic coupling)
+          for (int e=0; e<=numHarms; e++)
+          { // harmonic index of v
+            if (e==0) 
+            {
+              // Maybe I should have made two dummy blocks for baseband so the k-indices were not so confusing!
+              // baseband modulation
+              // [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ V_jC*cos(wm*t) - V_jS*sin(wm*t) ]
+
+              // + G_ijfI*cos(f*wc*t) * V_jC*cos(wm*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_omegaC_0_->block(4*f-2,0)[i][j] = +2*(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // in-phase cosine
+
+              // - G_ijfI*cos(f*wc*t) * V_jS*sin(wm*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_omegaC_0_->block(4*f-1,0)[i][j] = +2*(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // in-phase sine
+
+              // - G_ijfQ*sin(f*wc*t) * V_jC*cos(wm*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_omegaC_0_->block(4*f  ,0)[i][j] = -2*(+omega_*f)*Cf_[i]->block(j)[2*f]; // quadrature cosine
+
+              // + G_ijfQ*sin(f*wc*t) * V_jS*sin(wm*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_omegaC_0_->block(4*f+1,0)[i][j] = -2*(+omega_*f)*Cf_[i]->block(j)[2*f]; // quadrature sine
+            } else 
+            { // now f>0 and e>0
+              // [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) ]
+              int sigma = f+e;
+              // int delta = f-e; this line is just for the sake of understanding the code. Equations are with reference to delta, not deltaAbs.
+              int deltaAbs = std::abs(f-e);
+              int sign = f>=e ? 1 : -1;
+
+              // case sigma
+              if (sigma<=numHarms) 
+              { // f+e should not be larget than numHarms, otherwise ignore it
+                // in finite-harmonics space the system stil shows nonlineary and some mixing products have to be ignored
+
+                // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
+                // + 0.5*G_ijfI*cos(sigma*wc*t) * V_jeIC*cos(wm*t) - 0.5*G_ijfQ*cos(sigma*wc*t) * V_jeQC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_omegaC_0_->block(4*sigma-2, 4*e-2)[i][j] = +(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // in-phase cosine translated from in-phase cosine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(4*sigma-2, 4*e  )[i][j] = -(+omega_*f)*Cf_[i]->block(j)[2*f]; // in-phase cosine translated from quadrature cosine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*G_ijfI*cos(sigma*wc*t) * V_jeIS*sin(wm*t) + 0.5*G_ijfQ*cos(sigma*wc*t) * V_jeQS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_omegaC_0_->block(4*sigma-1,4*e-1)[i][j] = +(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // in-phase sine translated from in-phase sine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(4*sigma-1,4*e+1)[i][j] = -(+omega_*f)*Cf_[i]->block(j)[2*f]; // in-phase sine translated from quadrature sine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t)
+                // - 0.5*G_ijfI*sin(sigma*wc*t) * V_jeQC*cos(wm*t) - 0.5*G_ijfQ*sin(sigma*wc*t) * V_jeIC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_omegaC_0_->block(4*sigma  ,4*e  )[i][j] = -(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // quadrature cosine translated from quadrature cosine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(4*sigma  ,4*e-2)[i][j] = -(+omega_*f)*Cf_[i]->block(j)[2*f]; // quadrature cosine translated from in-phase cosine by quadrature G
+
+                // + G_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t)
+                // + 0.5*G_ijfI*sin(sigma*wc*t) * V_jeQS*sin(wm*t) + 0.5*G_ijfQ*sin(sigma*wc*t) * V_jeIS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_omegaC_0_->block(4*sigma+1,4*e+1)[i][j] = -(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // quadrature sine translated from quadrature sine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(4*sigma+1,4*e-1)[i][j] = -(+omega_*f)*Cf_[i]->block(j)[2*f]; // quadrature sine translated from in-phase sine by quadrature G
+              }
+
+              // case delta
+              // now I have to deal with the index issue! if delta==0 then the indices become negative!
+              if (deltaAbs==0)
+              {
+                // translation from harmonics to baseband
+                // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
+                // + 0.5*G_ijfI * V_jeIC*cos(wm*t) + 0.5*G_ijfQ * V_jeQC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_omegaC_0_->block(0, 4*e-2)[i][j] = +(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // baseband cosine translated from in-phase cosine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(1, 4*e  )[i][j] = +(+omega_*f)*Cf_[i]->block(j)[2*f]; // baseband cosine translated from quadrature cosine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*G_ijfI * V_jeIS*sin(wm*t) - 0.5*G_ijfQ * V_jeQS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_omegaC_0_->block(0, 4*e-1)[i][j] = +(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // baseband sine translated from in-phase sine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(1, 4*e+1)[i][j] = +(+omega_*f)*Cf_[i]->block(j)[2*f]; // baseband sine translated from quadrature sine by quadrature G
+              }
+              else
+              {
+                // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
+                // + 0.5*G_ijfI*cos(delta*wc*t) * V_jeIC*cos(wm*t) + 0.5*G_ijfQ*cos(delta*wc*t) * V_jeQC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_omegaC_0_->block(4*deltaAbs-2, 4*e-2)[i][j] = +(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // in-phase cosine translated from in-phase cosine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(4*deltaAbs-2, 4*e  )[i][j] = +(+omega_*f)*Cf_[i]->block(j)[2*f]; // in-phase cosine translated from quadrature cosine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*G_ijfI*cos(delta*wc*t) * V_jeIS*sin(wm*t) - 0.5*G_ijfQ*cos(delta*wc*t) * V_jeQS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_omegaC_0_->block(4*deltaAbs-1,4*e-1)[i][j] = +(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // in-phase sine translated from in-phase sine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(4*deltaAbs-1,4*e+1)[i][j] = +(+omega_*f)*Cf_[i]->block(j)[2*f]; // in-phase sine translated from quadrature sine by quadrature G
+
+                // - G_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t)
+                // + 0.5*G_ijfI*sin(delta*wc*t) * V_jeQC*cos(wm*t) - 0.5*G_ijfQ*sin(delta*wc*t) * V_jeIC*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_omegaC_0_->block(4*deltaAbs  ,4*e  )[i][j] = +sign*(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // quadrature cosine translated from quadrature cosine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(4*deltaAbs  ,4*e-2)[i][j] = -sign*(+omega_*f)*Cf_[i]->block(j)[2*f]; // quadrature cosine translated from in-phase cosine by quadrature G
+
+                // + G_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t)
+                // - 0.5*G_ijfI*sin(delta*wc*t) * V_jeQS*sin(wm*t) + 0.5*G_ijfQ*sin(delta*wc*t) * V_jeIS*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_omegaC_0_->block(4*deltaAbs+1,4*e+1)[i][j] = +sign*(-omega_*f)*Cf_[i]->block(j)[2*f+1]; // quadrature sine translated from quadrature sine by in-phase G
+                harmonicSpaceMatrix_omegaC_0_->block(4*deltaAbs+1,4*e-1)[i][j] = -sign*(+omega_*f)*Cf_[i]->block(j)[2*f]; // quadrature sine translated from in-phase sine by quadrature G
+              }
+            } // end of f>0 and e>0
+          } // end of e loop
+        } // end of f!=0
+      } // end of f loop of Gf_
+    } // end of column loop
+  } // end of row loop
+
+  // These patterns are really ugly! I wish I could put them into a function. Probably it needs someone smarter than me to do it!
+  // Now the real ugly equations start! C Matrix PART 1 and C Matrix PART 2
+  // The time derivative makes very confusing equations, an additinal quadrature transformation, both for carrier and modulated components.
+
+  // **************************************************
+  //           C Matrix PART 1: 
+  // **************************************************
+  // Reminder:
+  // C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) // sum over f
+  // v_j(t) has the form of
+  // v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
+  // PART 1 scales with wc and performs cross-harmonic quadrature transformation:
+  // dv_j/dt |1 = - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*e*wc*sin(e*wc*t) - ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*e*wc*cos(e*wc*t)
+  // dv_j/dt |1 = [ - ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*cos(e*wc*t) - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*sin(e*wc*t) ]*e*wc
+  // First observation: dv_j/dt |1 has no baseband component => the first two column blocks of PART 1 are 0.
+  // This equation has also some similarities with the equation of G Matrix, in the sense that the wm parts are intact. 
+  // However, we have " quadrature <=> in-phase " transformation because of derivative with respect to carrier component.
+  // So we can use the same pattern of filling G matrix, but this time we need to swap in-phase and quadrature components.
+  // for instance, row 0 goes to row 1 and row 1 goes to row 0.
+  // which parameters should be swapped to reuse the G matrix loop?
+  harmonicSpaceMatrix_omegaC_1_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceMatrix_omegaC_1_->put( 0.0 );
+
+  for (int i=0; i<numRows; i++)
+  { // selectring a row of C Matrix
+    for (int j=0; j<numRows; j++)
+    { // selecting a column of C Matrix
+      for (int f=0; f<=numHarms; f++)
+      { // selecting a frequency point of Cf_
+        // now we fill the matrix
+        if (f==0)
+        { // linear transformation
+          // C_ij0 * [ ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*e*wc*cos(e*wc*t) - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*e*wc*sin(e*wc*t) ]
+          for (int e=1; e<numHarms; e++){
+            // the first two blocks are baseband and zero, hence starting from e=1
+            // + C_ij0 * V_jeQC*cos(wm*t) * e*wc*cos(e*wc*t) 
+            // RHS has positive sign
+            harmonicSpaceMatrix_omegaC_1_->block(4*e-2, 4*e  )[i][j] = +(e*omega_)*Cf_[i]->block(j)[0]; // in-phase cosine
+
+            // - C_ij0 * V_jeQS*sin(wm*t) * e*wc*cos(e*wc*t)
+            // RHS has negative sign
+            harmonicSpaceMatrix_omegaC_1_->block(4*e-1, 4*e+1)[i][j] = +(e*omega_)*Cf_[i]->block(j)[0]; // in-phase sine
+
+            // - C_ij0 * V_jeIC*cos(wm*t) * e*wc*sin(e*wc*t) ]
+            // RHS has positive sign
+            harmonicSpaceMatrix_omegaC_1_->block(4*e  , 4*e-2)[i][j] = -(e*omega_)*Cf_[i]->block(j)[0]; // quadrature cosine
+
+            // + C_ij0 * V_jeIS*sin(wm*t) * e*wc*sin(e*wc*t) ]
+            // RHS has negative sign
+            harmonicSpaceMatrix_omegaC_1_->block(4*e+1, 4*e-1)[i][j] = -(e*omega_)*Cf_[i]->block(j)[0]; // quadrature sine
+          }
+        } else
+        { // now the mixing parts (harmonic coupling)
+          for (int e=1; e<=numHarms; e++)
+          { // now f>0 and e>0
+            // [ C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) ] * [ - ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*cos(e*wc*t) - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*sin(e*wc*t) ]*e*wc
+            int sigma = f+e;
+            // int delta = f-e; this line is just for the sake of understanding the code. Equations are with reference to delta, not deltaAbs.
+            int deltaAbs = std::abs(f-e);
+            int sign = f>=e ? 1 : -1;
+
+            // case sigma
+            if (sigma<=numHarms) 
+            { // f+e should not be larget than numHarms, otherwise ignore it
+              // in finite-harmonics space the system stil shows nonlineary and some mixing products have to be ignored
+
+              // - C_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * cos(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * sin(e*wc*t)  // all *e*wc
+              // - 0.5*C_ijfI*cos(sigma*wc*t) * V_jeQC*cos(wm*t) - 0.5*C_ijfQ*cos(sigma*wc*t) * V_jeIC*cos(wm*t)              // all *e*wc
+              // RHS has positive sign
+              harmonicSpaceMatrix_omegaC_1_->block(4*sigma-2, 4*e  )[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f  ]; // in-phase cosine translated from quadrature cosine
+              harmonicSpaceMatrix_omegaC_1_->block(4*sigma-2, 4*e-2)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f+1]; // in-phase cosine translated from in-phase cosine
+
+              // + C_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * sin(e*wc*t)  // all *e*wc
+              // + 0.5*C_ijfI*cos(sigma*wc*t) * V_jeQS*sin(wm*t) + 0.5*C_ijfQ*cos(sigma*wc*t) * V_jeIS*sin(wm*t)              // all *e*wc
+              // RHS has negative sign
+              harmonicSpaceMatrix_omegaC_1_->block(4*sigma-1,4*e+1)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f  ]; // in-phase sine translated from quadrature sine
+              harmonicSpaceMatrix_omegaC_1_->block(4*sigma-1,4*e-1)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f+1]; // in-phase sine translated from in-phase sine
+
+              // - C_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * sin(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * cos(e*wc*t)  // all *e*wc
+              // - 0.5*C_ijfI*sin(sigma*wc*t) * V_jeIC*cos(wm*t) + 0.5*C_ijfQ*sin(sigma*wc*t) * V_jeQC*cos(wm*t)              // all *e*wc
+              // RHS has positive sign
+              harmonicSpaceMatrix_omegaC_1_->block(4*sigma  ,4*e-2)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f  ]; // quadrature cosine translated from in-phase cosine
+              harmonicSpaceMatrix_omegaC_1_->block(4*sigma  ,4*e  )[i][j] = +(e*omega_)*Cf_[i]->block(j)[2*f+1]; // quadrature cosine translated from quadrature cosine
+
+              // + C_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * sin(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * cos(e*wc*t)  // all *e*wc
+              // + 0.5*C_ijfI*sin(sigma*wc*t) * V_jeIS*sin(wm*t) - 0.5*C_ijfQ*sin(sigma*wc*t) * V_jeQS*sin(wm*t)              // all *e*wc
+              // RHS has negative sign
+              harmonicSpaceMatrix_omegaC_1_->block(4*sigma+1,4*e-1)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f  ]; // quadrature sine translated from in-phase sine
+              harmonicSpaceMatrix_omegaC_1_->block(4*sigma+1,4*e+1)[i][j] = +(e*omega_)*Cf_[i]->block(j)[2*f+1]; // quadrature sine translated from quadrature sine
+            }
+
+            // case delta
+            // now I have to deal with the index issue! if delta==0 then the indices become negative!
+            if (deltaAbs==0)
+            {
+              // translation from harmonics to baseband
+              // - C_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * cos(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * sin(e*wc*t)  // all *e*wc
+              // - 0.5*C_ijfI * V_jeQC*cos(wm*t) + 0.5*C_ijfQ * V_jeIC*cos(wm*t)                                              // all *e*wc
+              // RHS has positive sign
+              harmonicSpaceMatrix_omegaC_1_->block(0, 4*e  )[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f  ]; // baseband cosine translated from quadrature cosine
+              harmonicSpaceMatrix_omegaC_1_->block(1, 4*e-2)[i][j] = +(e*omega_)*Cf_[i]->block(j)[2*f+1]; // baseband cosine translated from in-phase cosine
+
+              // + C_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * sin(e*wc*t)  // all *e*wc
+              // + 0.5*C_ijfI * V_jeQS*sin(wm*t) - 0.5*C_ijfQ * V_jeIS*sin(wm*t)                                              // all *e*wc
+              // RHS has negative sign
+              harmonicSpaceMatrix_omegaC_1_->block(0, 4*e+1)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f  ]; // baseband sine translated from quadrature sine
+              harmonicSpaceMatrix_omegaC_1_->block(1, 4*e-1)[i][j] = +(e*omega_)*Cf_[i]->block(j)[2*f+1]; // baseband sine translated from in-phase sine
+            }
+            else
+            {
+              // - C_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * cos(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * sin(e*wc*t)  // all *e*wc
+              // - 0.5*C_ijfI*cos(delta*wc*t) * V_jeQC*cos(wm*t) - 0.5*C_ijfQ*cos(delta*wc*t) * V_jeIC*cos(wm*t)              // all *e*wc
+              // RHS has positive sign
+              harmonicSpaceMatrix_omegaC_1_->block(4*deltaAbs-2, 4*e  )[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f  ]; // in-phase cosine translated from quadrature cosine
+              harmonicSpaceMatrix_omegaC_1_->block(4*deltaAbs-2, 4*e-2)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f+1]; // in-phase cosine translated from in-phase cosine
+
+              // + C_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * sin(e*wc*t)  // all *e*wc
+              // + 0.5*C_ijfI*cos(delta*wc*t) * V_jeQS*sin(wm*t) + 0.5*C_ijfQ*cos(delta*wc*t) * V_jeIS*sin(wm*t)              // all *e*wc
+              // RHS has negative sign
+              harmonicSpaceMatrix_omegaC_1_->block(4*deltaAbs-1,4*e+1)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f  ]; // in-phase sine translated from quadrature sine
+              harmonicSpaceMatrix_omegaC_1_->block(4*deltaAbs-1,4*e-1)[i][j] = -(e*omega_)*Cf_[i]->block(j)[2*f+1]; // in-phase sine translated from in-phase sine
+
+              // - C_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * sin(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * cos(e*wc*t)  // all *e*wc
+              // - 0.5*C_ijfI*sin(delta*wc*t) * V_jeIC*cos(wm*t) + 0.5*C_ijfQ*sin(delta*wc*t) * V_jeQC*cos(wm*t)              // all *e*wc
+              // RHS has positive sign
+              harmonicSpaceMatrix_omegaC_1_->block(4*deltaAbs  ,4*e-2)[i][j] = -(e*omega_)*sign*Cf_[i]->block(j)[2*f  ]; // quadrature cosine translated from in-phase cosine
+              harmonicSpaceMatrix_omegaC_1_->block(4*deltaAbs  ,4*e  )[i][j] = +(e*omega_)*sign*Cf_[i]->block(j)[2*f+1]; // quadrature cosine translated from quadrature cosine
+
+              // + C_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * sin(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * cos(e*wc*t)  // all *e*wc
+              // + 0.5*C_ijfI*sin(delta*wc*t) * V_jeIS*sin(wm*t) - 0.5*C_ijfQ*sin(delta*wc*t) * V_jeQS*sin(wm*t)              // all *e*wc
+              // RHS has negative sign
+              harmonicSpaceMatrix_omegaC_1_->block(4*deltaAbs+1,4*e-1)[i][j] = -(e*omega_)*sign*Cf_[i]->block(j)[2*f  ]; // quadrature sine translated from in-phase sine
+              harmonicSpaceMatrix_omegaC_1_->block(4*deltaAbs+1,4*e+1)[i][j] = +(e*omega_)*sign*Cf_[i]->block(j)[2*f+1]; // quadrature sine translated from quadrature sine
+            }
+            // end of f>0 and e>0
+          } // end of e loop
+        } // end of f!=0
+      } // end of f loop of Gf_
+    } // end of column loop
+  } // end of row loop
+
+  // **************************************************
+  //           C Matrix PART 2: 
+  // **************************************************
+  // Reminder:
+  // C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) // sum over f
+  // v_j(t) has the form of
+  // v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
+  // PART 2 scales with wm and performs same-harmonic transformation of sine<=>cosine components. You can think of it as real<=>imaginary transformation.
+  // dv_j/dt |2 = - wm*V_jC*sin(wm*t) - wm*V_jS*cos(wm*t) + wm * ( - V_jeIC*sin(wm*t) - V_jeIS*cos(wm*t) )*cos(e*wc*t) - wm * ( - V_jeQC*sin(wm*t) - V_jeQS*cos(wm*t) )*sin(e*wc*t) 
+  // (1/wm)*dv_j/dt |2 = - V_jS*cos(wm*t) - V_jC*sin(wm*t) + ( - V_jeIS*cos(wm*t) - V_jeIC*sin(wm*t) )*cos(e*wc*t) - ( - V_jeQS*cos(wm*t) - V_jeQC*sin(wm*t) )*sin(e*wc*t) 
+  // This matrix has also similar signature to G, but is does inner-harmonic transformation.
+  harmonicSpaceMatrix_C_2_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceMatrix_C_2_->put( 0.0 );
+
+  for (int i=0; i<numRows; i++)
+  { // selectring a row of C Matrix
+    for (int j=0; j<numRows; j++)
+    { // selecting a column of C Matrix
+      for (int f=0; f<=numHarms; f++)
+      { // selecting a frequency point of Cf_
+        // now we fill the matrix
+        // first the diagon of G matrix
+        if (f==0)
+        { // linear transformation
+          // C_ij0 * [ - V_jS*cos(wm*t) - V_jC*sin(wm*t) + ( - V_jeIS*cos(wm*t) - V_jeIC*sin(wm*t) )*cos(e*wc*t) - ( - V_jeQS*cos(wm*t) - V_jeQC*sin(wm*t) )*sin(e*wc*t) ]
+          for (int e=0; e<numHarms; e++){
+            if (e==0)
+            { // linear transformation at baseband
+              // - C_ij0 * V_jS*cos(wm*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_C_2_->block(0, 1)[i][j] = -Cf_[i]->block(j)[0]; // in-phase cosine
+
+              // - C_ij0 * V_jC*sin(wm*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_C_2_->block(1, 0)[i][j] = +Cf_[i]->block(j)[0]; // in-phase sine
+            } else
+            { // linear transformation at harmonics 
+              // - C_ij0 * V_jeIS*cos(wm*t) * cos(e*wc*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_C_2_->block(4*e-2, 4*e-1)[i][j] = -Cf_[i]->block(j)[0]; // in-phase cosine
+
+              // - C_ij0 * V_jeIC*sin(wm*t) * cos(e*wc*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_C_2_->block(4*e-1, 4*e-2)[i][j] = +Cf_[i]->block(j)[0]; // in-phase sine
+
+              // + C_ij0 * V_jeQS*cos(wm*t) * sin(e*wc*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_C_2_->block(4*e  , 4*e+1)[i][j] = +Cf_[i]->block(j)[0]; // quadrature cosine
+
+              // + C_ij0 * V_jeQC*sin(wm*t) * sin(e*wc*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_C_2_->block(4*e+1, 4*e  )[i][j] = -Cf_[i]->block(j)[0]; // quadrature sine
+            }
+          }
+        } else
+        { // now the mixing parts (harmonic coupling)
+          for (int e=0; e<=numHarms; e++)
+          { // harmonic index of v
+            if (e==0) 
+            { // baseband modulation
+              // [ C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) ] * [ - V_jS*cos(wm*t) - V_jC*sin(wm*t) ]
+
+              // - C_ijfI*cos(f*wc*t) * V_jS*cos(wm*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_C_2_->block(4*f-2,0)[i][j] = -2*Cf_[i]->block(j)[2*f]; // in-phase cosine
+
+              // - C_ijfI*cos(f*wc*t) * V_jC*sin(wm*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_C_2_->block(4*f-1,0)[i][j] = +2*Cf_[i]->block(j)[2*f]; // in-phase sine
+
+              // + C_ijfQ*sin(f*wc*t) * V_jC*cos(wm*t)
+              // RHS has positive sign
+              harmonicSpaceMatrix_C_2_->block(4*f  ,0)[i][j] = +2*Cf_[i]->block(j)[2*f+1]; // quadrature cosine
+
+              // + C_ijfQ*sin(f*wc*t) * V_jS*sin(wm*t)
+              // RHS has negative sign
+              harmonicSpaceMatrix_C_2_->block(4*f+1,0)[i][j] = -2*Cf_[i]->block(j)[2*f+1]; // quadrature sine
+            } else 
+            { // now f>0 and e>0
+              // [ C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) ] * [ ( - V_jeIS*cos(wm*t) - V_jeIC*sin(wm*t) )*cos(e*wc*t) - ( - V_jeQS*cos(wm*t) - V_jeQC*sin(wm*t) )*sin(e*wc*t) ]
+              int sigma = f+e;
+              // int delta = f-e; this line is just for the sake of understanding the code. Equations are with reference to delta, not deltaAbs.
+              int deltaAbs = std::abs(f-e);
+              int sign = f>=e ? 1 : -1;
+
+              // case sigma
+              if (sigma<=numHarms) 
+              { // f+e should not be larget than numHarms, otherwise ignore it
+                // in finite-harmonics space the system stil shows nonlineary and some mixing products have to be ignored
+
+                // - C_ijfI*cos(f*wc*t) * V_jeIS*cos(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeQS*cos(wm*t) * sin(e*wc*t)
+                // - 0.5*C_ijfI*cos(sigma*wc*t) * V_jeIS*cos(wm*t) + 0.5*C_ijfQ*cos(sigma*wc*t) * V_jeQS*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_C_2_->block(4*sigma-2, 4*e-1)[i][j] = -Cf_[i]->block(j)[2*f  ]; // in-phase cosine translated from in-phase sine by d/dt
+                harmonicSpaceMatrix_C_2_->block(4*sigma-2, 4*e+1)[i][j] = +Cf_[i]->block(j)[2*f+1]; // in-phase cosine translated from quadrature sine by d/dt
+
+                // - C_ijfI*cos(f*wc*t) * V_jeIC*sin(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeQC*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*C_ijfI*cos(sigma*wc*t) * V_jeIC*sin(wm*t) + 0.5*C_ijfQ*cos(sigma*wc*t) * V_jeQC*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_C_2_->block(4*sigma-1,4*e-2)[i][j] = +Cf_[i]->block(j)[2*f  ]; // in-phase sine translated from in-phase cosine by d/dt
+                harmonicSpaceMatrix_C_2_->block(4*sigma-1,4*e  )[i][j] = -Cf_[i]->block(j)[2*f+1]; // in-phase sine translated from quadrature cosine by d/dt
+
+                // + C_ijfI*cos(f*wc*t) * V_jeQS*cos(wm*t) * sin(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIS*cos(wm*t) * cos(e*wc*t)
+                // + 0.5*C_ijfI*sin(sigma*wc*t) * V_jeQS*cos(wm*t) + 0.5*C_ijfQ*sin(sigma*wc*t) * V_jeIS*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_C_2_->block(4*sigma  ,4*e+1)[i][j] = +Cf_[i]->block(j)[2*f  ]; // quadrature cosine translated from quadrature sine by d/dt
+                harmonicSpaceMatrix_C_2_->block(4*sigma  ,4*e-1)[i][j] = +Cf_[i]->block(j)[2*f+1]; // quadrature cosine translated from in-phase sine by d/dt
+
+                // + C_ijfI*cos(f*wc*t) * V_jeQC*sin(wm*t) * sin(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIC*sin(wm*t) * cos(e*wc*t)
+                // + 0.5*C_ijfI*sin(sigma*wc*t) * V_jeQC*sin(wm*t) + 0.5*C_ijfQ*sin(sigma*wc*t) * V_jeIC*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_C_2_->block(4*sigma+1,4*e  )[i][j] = -Cf_[i]->block(j)[2*f  ]; // quadrature sine translated from quadrature cosine by d/dt
+                harmonicSpaceMatrix_C_2_->block(4*sigma+1,4*e-2)[i][j] = -Cf_[i]->block(j)[2*f+1]; // quadrature sine translated from in-phase cosine by d/dt
+              }
+
+              // case delta
+              // now I have to deal with the index issue! if delta==0 then the indices become negative!
+              if (deltaAbs==0)
+              {
+                // translation from harmonics to baseband
+                // - C_ijfI*cos(f*wc*t) * V_jeIS*cos(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeQS*cos(wm*t) * sin(e*wc*t)
+                // - 0.5*C_ijfI * V_jeIS*cos(wm*t) + 0.5*C_ijfQ * V_jeQS*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_C_2_->block(0, 4*e-1)[i][j] = -Cf_[i]->block(j)[2*f  ]; // in-phase cosine translated from in-phase sine by d/dt
+                harmonicSpaceMatrix_C_2_->block(0, 4*e+1)[i][j] = +Cf_[i]->block(j)[2*f+1]; // in-phase cosine translated from quadrature sine by d/dt
+
+                // - C_ijfI*cos(f*wc*t) * V_jeIC*sin(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeQC*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*C_ijfI * V_jeIC*sin(wm*t) + 0.5*C_ijfQ * V_jeQC*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_C_2_->block(1,4*e-2)[i][j] = +Cf_[i]->block(j)[2*f  ]; // in-phase sine translated from in-phase cosine by d/dt
+                harmonicSpaceMatrix_C_2_->block(1,4*e  )[i][j] = -Cf_[i]->block(j)[2*f+1]; // in-phase sine translated from quadrature cosine by d/dt
+              }
+              else
+              {
+                // - C_ijfI*cos(f*wc*t) * V_jeIS*cos(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeQS*cos(wm*t) * sin(e*wc*t)
+                // - 0.5*C_ijfI*cos(delta*wc*t) * V_jeIS*cos(wm*t) + 0.5*C_ijfQ*cos(delta*wc*t) * V_jeQS*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_C_2_->block(4*deltaAbs-2, 4*e-1)[i][j] = -Cf_[i]->block(j)[2*f  ]; // in-phase cosine translated from in-phase sine by d/dt
+                harmonicSpaceMatrix_C_2_->block(4*deltaAbs-2, 4*e+1)[i][j] = +Cf_[i]->block(j)[2*f+1]; // in-phase cosine translated from quadrature sine by d/dt
+
+                // - C_ijfI*cos(f*wc*t) * V_jeIC*sin(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeQC*sin(wm*t) * sin(e*wc*t)
+                // - 0.5*C_ijfI*cos(delta*wc*t) * V_jeIC*sin(wm*t) + 0.5*C_ijfQ*cos(delta*wc*t) * V_jeQC*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_C_2_->block(4*deltaAbs-1,4*e-2)[i][j] = +Cf_[i]->block(j)[2*f  ]; // in-phase sine translated from in-phase cosine by d/dt
+                harmonicSpaceMatrix_C_2_->block(4*deltaAbs-1,4*e  )[i][j] = -Cf_[i]->block(j)[2*f+1]; // in-phase sine translated from quadrature cosine by d/dt
+
+                // + C_ijfI*cos(f*wc*t) * V_jeQS*cos(wm*t) * sin(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIS*cos(wm*t) * cos(e*wc*t)
+                // + 0.5*C_ijfI*sin(delta*wc*t) * V_jeQS*cos(wm*t) + 0.5*C_ijfQ*sin(delta*wc*t) * V_jeIS*cos(wm*t)
+                // RHS has positive sign
+                harmonicSpaceMatrix_C_2_->block(4*deltaAbs  ,4*e+1)[i][j] = +sign*Cf_[i]->block(j)[2*f  ]; // quadrature cosine translated from quadrature sine by d/dt
+                harmonicSpaceMatrix_C_2_->block(4*deltaAbs  ,4*e-1)[i][j] = +sign*Cf_[i]->block(j)[2*f+1]; // quadrature cosine translated from in-phase sine by d/dt
+
+                // + C_ijfI*cos(f*wc*t) * V_jeQC*sin(wm*t) * sin(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIC*sin(wm*t) * cos(e*wc*t)
+                // + 0.5*C_ijfI*sin(delta*wc*t) * V_jeQC*sin(wm*t) + 0.5*C_ijfQ*sin(delta*wc*t) * V_jeIC*sin(wm*t)
+                // RHS has negative sign
+                harmonicSpaceMatrix_C_2_->block(4*deltaAbs+1,4*e  )[i][j] = -sign*Cf_[i]->block(j)[2*f  ]; // quadrature sine translated from quadrature cosine by d/dt
+                harmonicSpaceMatrix_C_2_->block(4*deltaAbs+1,4*e-2)[i][j] = -sign*Cf_[i]->block(j)[2*f+1]; // quadrature sine translated from in-phase cosine by d/dt
+
+              }
+            } // end of f>0 and e>0
+          } // end of e loop
+        } // end of f!=0
+      } // end of f loop of Gf_
+    } // end of column loop
+  } // end of row loop
+
+
+
+  harmonicSpaceB_->putScalar( 0.0 );
+  harmonicSpaceB_->block( 0 ).update( 1.0, *bVecRealPtr);
+  harmonicSpaceB_->block( 1 ).update( 1.0, *bVecImagPtr);
 
 
   // now take the Fourier Transform of Ct_ and Gt_
@@ -577,18 +1203,19 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
   hbLoaderPtr_->permutedIFT(bXf, &*bXtPtr_);
 
   Linear::BlockVector & bX = *bXtPtr_;
-  BlockCount_ = bX.blockCount(); // number of time points
-  BlockSize_ = bX.blockSize(); // number of GIDs
+
+  int BlockCount = bX.blockCount(); // number of time points
+  int BlockSize = bX.blockSize(); // number of GIDs
 
   if (DEBUG_HBNOISE)
   {
-    for (int i = 0; i < BlockCount_; ++i)
+    for (int i = 0; i < BlockCount; ++i)
     {
       Xyce::dout() << "Solution time domain, block (" << i << "): each block is a time point" << std::endl;
       bX.block(i).print( Xyce::dout() );
       Xyce::dout() << std::endl;
     }
-    for (int i = 0; i < BlockSize_; ++i)
+    for (int i = 0; i < BlockSize; ++i)
     {
       Xyce::dout() << "Solution frequency domain, block (" << i << "): each block is a node" << std::endl;
       bXf.block(i).print( Xyce::dout() );
@@ -599,7 +1226,7 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
   // Solutions:
   Linear::Vector * currSolutionPtr = builderPtr_->createVector();
 
-  for (int i=0; i<BlockSize_; i++){
+  for (int i=0; i<BlockSize; i++){
     Ct_.push_back(hbBuilderPtr_->createTimeDomainBlockVector());
     Gt_.push_back(hbBuilderPtr_->createTimeDomainBlockVector());
     Ct_[i]->putScalar(0.0);
@@ -617,7 +1244,7 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
   Teuchos::RCP<Linear::Matrix> dFdxMatrixPtr = rcp(builderPtr_->createMatrix());
 
   // now we store dFdx and dQdx matrices
-  for (int i = 0; i < BlockCount_; ++i)
+  for (int i = 0; i < BlockCount; ++i)
   {
     deviceManager_.setFastTime(hbAnalysis_->fastTimes_[i]);
     loader_.updateSources();  // this is here to handle "fast" sources.
@@ -698,18 +1325,18 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
     tmpC = &*dQdxMatrixPtr;
 
     int numEntries;
-    std::vector<double> coeffs(BlockSize_); 
-    std::vector<int> colIndices(BlockSize_);
+    std::vector<double> coeffs(BlockSize); 
+    std::vector<int> colIndices(BlockSize);
 
-    for (int j=0; j<BlockSize_; j++) {
-      tmpC->getLocalRowCopy(j, BlockSize_, numEntries, coeffs.data(), colIndices.data());
+    for (int j=0; j<BlockSize; j++) {
+      tmpC->getLocalRowCopy(j, BlockSize, numEntries, coeffs.data(), colIndices.data());
       for (int k = 0; k < numEntries; k++) {
         Ct_[j]->block(i)[colIndices[k]] = coeffs[k];
       }
     }
 
-    for (int j=0; j<BlockSize_; j++) {
-      tmpG->getLocalRowCopy(j, BlockSize_, numEntries, coeffs.data(), colIndices.data());
+    for (int j=0; j<BlockSize; j++) {
+      tmpG->getLocalRowCopy(j, BlockSize, numEntries, coeffs.data(), colIndices.data());
       for (int k = 0; k < numEntries; k++) {
         Gt_[j]->block(i)[colIndices[k]] = coeffs[k];
       }
@@ -732,7 +1359,7 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
   if (DEBUG_HBNOISE)
   {
     Xyce::dout() << "Reporting Gt_ Matrices, each block is a time point" << std::endl;
-    for (int i=0; i<BlockSize_; i++){
+    for (int i=0; i<BlockSize; i++){
       Xyce::dout() << "Gt_[" << i << "]: " << std::endl;
       Gt_[i]->print(Xyce::dout());
       Xyce::dout() << std::endl;
