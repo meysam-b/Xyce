@@ -33,28 +33,21 @@
 #include <fstream>
 
 #include <N_ANP_HBNOISE.h>
+#include "N_ANP_NoiseData.h"
+
 #include <N_ANP_AnalysisManager.h>
-#include <N_ANP_DCSweep.h>
 #include <N_ANP_OutputMgrAdapter.h>
-#include <N_ANP_Report.h>
-#include <N_ANP_Transient.h>
 #include <N_ANP_SweepParam.h>
 #include <N_ANP_SweepParamFreeFunctions.h>
-#include <N_DEV_DeviceMgr.h>
-#include <N_IO_ActiveOutput.h>
 #include <N_IO_CircuitBlock.h>
 #include <N_IO_CmdParse.h>
 #include <N_IO_OptionBlock.h>
 #include <N_IO_PkgOptionsMgr.h>
 #include <N_IO_SpiceSeparatedFieldTool.h>
-#include <N_IO_PrintTypes.h>
 #include <N_LAS_BlockMatrix.h>
 #include <N_LAS_BlockSystemHelpers.h>
 #include <N_LAS_BlockVector.h>
-#include <N_LAS_HBBuilder.h>
-#include <N_LAS_HBPrecondFactory.h>
-#include <N_LAS_HBSolverFactory.h>
-#include <N_LAS_PrecondFactory.h>
+#include <N_LAS_Builder.h>
 #include <N_LAS_Graph.h>
 #include <N_LAS_Matrix.h>
 #include <N_LAS_MultiVector.h>
@@ -65,22 +58,38 @@
 #include <N_LAS_TranSolverFactory.h>
 #include <N_LOA_Loader.h>
 #include <N_NLS_Manager.h>
-#include <N_LOA_HBLoader.h>
-#include <N_LOA_NonlinearEquationLoader.h>
-#include <N_NLS_Manager.h>
-#include <N_PDS_ParMap.h>
+
 #include <N_TIA_DataStore.h>
 #include <N_TIA_fwd.h>
 #include <N_TIA_StepErrorControl.h>
 #include <N_TIA_WorkingIntegrationMethod.h>
-#include <N_UTL_APFT.h>
+
 #include <N_UTL_Diagnostic.h>
+#include <N_UTL_FeatureTest.h>
+#include <N_UTL_LogStream.h>
+#include <N_UTL_Math.h>
+#include <N_UTL_NodeSymbols.h>
+#include <N_UTL_SaveIOSState.h>
+#include <N_UTL_Timer.h>
+
+#include <N_PDS_Comm.h>
+#include <N_PDS_MPI.h>
+#include <N_PDS_Manager.h>
+#include <N_PDS_Serial.h>
+
 #include <N_UTL_ExtendedString.h>
 #include <N_UTL_FFTInterface.hpp>
-#include <N_UTL_FeatureTest.h>
 #include <N_UTL_MachDepParams.h>
-#include <N_UTL_Math.h>
-#include <N_UTL_Timer.h>
+
+#include <N_LAS_HBBuilder.h>
+#include <N_LAS_HBPrecondFactory.h>
+#include <N_LAS_HBSolverFactory.h>
+#include <N_LAS_PrecondFactory.h>
+
+#include <N_DEV_DeviceMgr.h>
+#include <N_LOA_HBLoader.h>
+#include <N_LOA_NonlinearEquationLoader.h>
+#include <N_UTL_APFT.h>
 
 #include <Teuchos_BLAS.hpp>
 #include <Teuchos_Utils.hpp>
@@ -90,18 +99,51 @@
 #include <Teuchos_SerialDenseHelpers.hpp>
 #include <Teuchos_SerialDenseSolver.hpp>
 
+
+#include <N_PDS_ParMap.h>
+
 #include <N_TOP_Topology.h>
-#include <N_PDS_Comm.h>
 
 #include "N_ANP_HB.h"
-#include "N_ANP_NoiseData.h"
 
+#include <Teuchos_RCP.hpp>
 using Teuchos::rcp;
 using Teuchos::RCP;
 using Teuchos::rcp_dynamic_cast;
 
+// putting these here for now (from spice3's noisedefs.h file)
+#define N_MINLOG          1E-38       /* the smallest number we can take the log of */
+#define N_MINGAIN         1E-20  // the smallest input-output gain we can tolerate
+                                 // (to calculate input-referred noise we divide
+                                 // the output noise by the gain)
+
+#define N_INTFTHRESH   1E-10       // the largest slope (of a log-log noise spectral
+                                   //    density vs. freq plot) at which the noise
+                                   //    spectum is still considered flat. (no need for
+                                   //    log curve fitting)
+#define N_INTUSELOG      1E-10       // decides which expression to use for the integral of
+                                     //    x**k.  If k is -1, then we must use a 'ln' form.
+                                     //    Otherwise, we use a 'power' form.  This
+                                     //    parameter is the region around (k=) -1 for which
+                                     //    use the 'ln' form.
+
 namespace Xyce {
 namespace Analysis {
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::setLinSol
+// Purpose       : Save linear solver options
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/13/2025
+//-----------------------------------------------------------------------------
+bool HBNOISE::setLinSol(const Util::OptionBlock &option_block)
+{
+  linSolOptionBlock_ = option_block;
+  return true;
+}
+
 
 //-----------------------------------------------------------------------------
 // Function      : HBNOISE::convertDataToSweepParams
@@ -174,8 +216,6 @@ HBNOISE::HBNOISE(
     dataSpecification_(false),
     hbnoiseLoopSize_(0),
     hbAnalysis_(0),
-    bVecRealPtr(linearSystem_.builder().createVector()),
-    bVecImagPtr(linearSystem_.builder().createVector()),
     bNoiseVecRealPtr(linearSystem_.builder().createVector()),
     bNoiseVecImagPtr(linearSystem_.builder().createVector()),
     calcNoiseIntegrals_(true),
@@ -183,8 +223,6 @@ HBNOISE::HBNOISE(
     size_(0),
     period_(0.0)
 {
-  bVecRealPtr->putScalar(0.0);
-  bVecImagPtr->putScalar(0.0);
   bNoiseVecRealPtr->putScalar(0.0);
   bNoiseVecImagPtr->putScalar(0.0);
   
@@ -345,14 +383,7 @@ bool HBNOISE::doInit()
     hbnoiseLoopSize_ = setupSweepParam_();
   }
 
-  // after dataSpecification_ validation, run the HB analysis
-  analysisManager_.pushActiveAnalysis(hbAnalysis_);
-  bsuccess = hbAnalysis_->run();
-  hbBuilderPtr_ = hbAnalysis_->hbBuilderPtr_;
-  builderPtr_ = &(hbAnalysis_->builder_);
-  hbLoaderPtr_ = hbAnalysis_->hbLoaderPtr_;
-  updateLinearTimeVariantSystem_C_and_G_();
-  createHarmonicSpaceLinearSystem_();
+  processOutputNodes ();
 
   return bsuccess;
 }
@@ -380,10 +411,518 @@ bool HBNOISE::doRun()
 //-----------------------------------------------------------------------------
 bool HBNOISE::doLoopProcess()
 {
+  bool bsuccess = true;
+
+  analysisManager_.pushActiveAnalysis(hbAnalysis_);
+  bsuccess = hbAnalysis_->run();
+  // add if fails ...
+
+  // save the mag & phase of solution for AM/PM noise calculations
+  
+
+  // some of these pointers are set after HB::run(), so I have to copy them at this point.
+  hbBuilderPtr_ = hbAnalysis_->hbBuilderPtr_;
+  builderPtr_ = &(hbAnalysis_->builder_);
+  hbLoaderPtr_ = hbAnalysis_->hbLoaderPtr_;
+
+  updateLinearTimeVariantSystem_C_and_G_();
+  createHarmonicSpaceLinearSystem_();
+
+  // static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
+  //   (AnalysisEvent(AnalysisEvent::INITIALIZE, AnalysisEvent::NOISE));
+
+  int numNoiseDevices = loader_.getNumNoiseDevices();
+  // clear out the integral arrays
+  for (int i=0;i<numNoiseDevices;++i)
+  {
+    int numNoiseThisDevice = noiseDataVec_[i]->numSources;
+    for (int j=0;j<numNoiseThisDevice;++j)
+    {
+      noiseDataVec_[i]->inputNoiseTotal[j] = 0.0;
+      noiseDataVec_[i]->outputNoiseTotal[j] = 0.0;
+    }
+  }
+
+  setupAdjointRHS_();
+
+  Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
+  Parallel::Communicator &comm = *(pds_manager.getPDSComm());
+  int myPID = comm.procID();
+
+  // ///////////////////////////////////////////////////////////////////////////
+  // // frequency loop
+  // // loop over all the specified frequencies, do an AC solve and a NOISE solve at each.
+  for (int currentStep = 0; currentStep < hbnoiseLoopSize_; ++currentStep)
+  {
+  //   // solve the AC system, to get up-to-date currents and voltages
+    if (dataSpecification_)
+    {
+      updateDataParams_(currentStep);
+    }
+    else
+    {
+      updateCurrentFreq_(currentStep);
+    }
+
+  //   static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
+  //     (AnalysisEvent(AnalysisEvent::STEP_STARTED, AnalysisEvent::NOISE, currentFreq_, currentStep));
+
+  //   updateACLinearSystem_C_and_G_();
+  //   updateACLinearSystemFreq_();
+    updateHarmonicSpaceFreq_();
+  //   updateACLinearSystemMagAndPhase_();
+
+  //   bool stepAttemptStatus;
+  //   {
+  //     Stats::StatTop _ACsolveStat("AC Linear Solve");
+  //     Stats::TimeBlock _AC_Timer(_ACsolveStat);
+
+  //     stepAttemptStatus = solveACLinearSystem_();
+  //   }
+
+  //   // save a copy of X_ (the AC solution, already computed), for output purposes, etc.
+  //   *saved_AC_X_ = *X_;
+
+  //   // Compute AC gain.
+  //   Linear::Vector & Xreal = X_->block( 0 );
+  //   Linear::Vector & Ximag = X_->block( 1 );
+
+  //   double v1r = 0.0;
+  //   double v1i = 0.0;
+  //   double v2r = 0.0;
+  //   double v2i = 0.0;
+
+  //   //comm.barrier();
+  //   int root=-1;
+  //   if (outputVarGIDs_.size()>0)
+  //   {
+  //     if (outputVarGIDs_[0] > -1)
+  //     {
+  //       v1r = Xreal.getElementByGlobalIndex(outputVarGIDs_[0]);
+  //       v1i = Ximag.getElementByGlobalIndex(outputVarGIDs_[0]);
+  //       root = myPID;
+  //     }
+  //     Xyce::Parallel::AllReduce(comm.comm(), MPI_MAX, &root, 1);
+  //     comm.bcast( &v1r, 1, root );
+  //     comm.bcast( &v1i, 1, root );
+  //   }
+
+  //   root=-1;
+  //   if (outputVarGIDs_.size()>1)
+  //   {
+  //     if (outputVarGIDs_[1] > -1)
+  //     {
+  //       v2r = Xreal.getElementByGlobalIndex(outputVarGIDs_[1]);
+  //       v2i = Ximag.getElementByGlobalIndex(outputVarGIDs_[1]);
+  //       root = myPID;
+  //     }
+  //     Xyce::Parallel::AllReduce(comm.comm(), MPI_MAX, &root, 1);
+  //     comm.bcast( &v2r, 1, root );
+  //     comm.bcast( &v2i, 1, root );
+  //   }
+
+  //   double realVal = v1r-v2r;
+  //   double imagVal = v1i-v2i;
+  //   GainSqInv_ = 1.0 / std::max(((realVal*realVal) + (imagVal*imagVal)),N_MINGAIN);
+  //   lnGainInv_ = std::log(GainSqInv_);
+
+  //   // save previous (last) lnNoise densities
+  //   for (int i=0;i<noiseDataVec_.size();++i)
+  //   {
+  //     int numNoiseThisDevice = noiseDataVec_[i]->numSources;
+  //     for (int j=0;j<numNoiseThisDevice;++j)
+  //     {
+  //       noiseDataVec_[i]->lastLnNoiseDens[j] = noiseDataVec_[i]->lnNoiseDens[j];
+  //     }
+  //   }
+
+    // do NOISE analysis for this frequency.
+    resetAdjointHBNOISELinearSystem_(true);
+    solveAdjointHBNOISE_();
+
+  //   // Perform total noise integrals, if the specified frequency values are
+  //   // monotonically increasing.  This is always true if DATA=<name> is NOT
+  //   // used on the .NOISE line.
+  //   if (currentStep != 0 && calcNoiseIntegrals_)
+  //   {
+  //     for (int i=0;i<noiseDataVec_.size();++i)
+  //     {
+  //       int numNoiseThisDevice = noiseDataVec_[i]->numSources;
+  //       for (int j=0;j<numNoiseThisDevice;++j)
+  //       {
+  //         double noizDens = noiseDataVec_[i]->outputNoiseDens[j];
+  //         double lnDens = noiseDataVec_[i]->lnNoiseDens[j];
+  //         double lnlastDens = noiseDataVec_[i]->lastLnNoiseDens[j];
+
+  //         double tempOutNoise = noiseIntegral( noizDens, lnDens, lnlastDens,
+  //                delLnFreq_, delFreq_, lnFreq_, lnLastFreq_);
+
+  //         double tempInNoise = noiseIntegral(
+  //                noizDens * GainSqInv_,
+  //                lnDens + lnGainInv_,
+  //                lnlastDens + lnGainInv_,
+  //                delLnFreq_, delFreq_, lnFreq_, lnLastFreq_);
+
+
+  //         noiseDataVec_[i]->outputNoiseTotal[j] += tempOutNoise;
+  //         noiseDataVec_[i]->inputNoiseTotal[j] += tempInNoise;
+
+  //         totalOutputNoise_+=tempOutNoise;
+  //         totalInputNoise_+=tempInNoise;
+  //       }
+  //     }
+  //   }
+
+  //   // process success/failure
+  //   if (stepAttemptStatus)
+  //   {
+  //     static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
+  //       (AnalysisEvent(AnalysisEvent::STEP_SUCCESSFUL, AnalysisEvent::NOISE, currentFreq_, currentStep));
+  //     doProcessSuccessfulStep();
+  //   }
+  //   else // stepAttemptStatus  (ie do this if the step FAILED)
+  //   {
+  //     static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
+  //       (AnalysisEvent(AnalysisEvent::STEP_FAILED, AnalysisEvent::NOISE, currentFreq_, currentStep));
+  //     doProcessFailedStep();
+  //   }
+  }
+
+  // Xyce::Parallel::AllReduce(comm.comm(), MPI_SUM, &totalOutputNoise_, 1);
+  // Xyce::Parallel::AllReduce(comm.comm(), MPI_SUM, &totalInputNoise_, 1);
+
+  // if (calcNoiseIntegrals_)
+  // {
+  //   // Outputs to the screen
+  //   noiseOutputToScreen_( Xyce::lout() );
+  // }
+
+  // static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
+  //   (AnalysisEvent(AnalysisEvent::FINISH, AnalysisEvent::NOISE));
+
   return true;
 }
 
+//-----------------------------------------------------------------------------
+// Function      : NOISE::setupAdjointRHS_
+// Purpose       : Sets up stuff that only needs to be set up once,
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/31/2025
+// Originally written by Eric Keiter for the NOISE analysis class
+//-----------------------------------------------------------------------------
+// This function (copied from the NOISE analysis class) is still usable for HBNOISE. 
+// The GIDs are set properly in the bNoiseVecRealPtr vector.
+// We need to place this vector properly in right block in the RHS, 
+// taking into account the harmonic number and in-phase/quadrature components
+void HBNOISE::setupAdjointRHS_()
+{
+  Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
+  Parallel::Communicator &comm = *(pds_manager.getPDSComm());
 
+  bNoiseVecRealPtr->putScalar(0.0);
+  bNoiseVecImagPtr->putScalar(0.0);
+
+  int numOutVars = outputVarNames_.size();
+  for (int iout=0;iout<numOutVars;++iout)
+  {
+    int tmpGID=outputVarGIDs_[iout];
+    if (tmpGID > -1)
+    {
+      double val=1.0;
+      if (iout>0) val=-1.0;
+      bNoiseVecRealPtr->setElementByGlobalIndex( tmpGID, val, 0);
+    }
+  }
+  bNoiseVecRealPtr->fillComplete();
+  if (DEBUG_ANALYSIS)
+  {
+    Xyce::dout() << "bNoiseVecRealPtr:" << std::endl;
+    bNoiseVecRealPtr->print(Xyce::dout());
+    Xyce::dout() << std::endl;
+    Xyce::dout() << "bNoiseVecImagPtr:" << std::endl;
+    bNoiseVecImagPtr->print(Xyce::dout());
+    Xyce::dout() << std::endl;
+  }
+}
+
+//-----------------------------------------------------------------------------
+// Function      : NOISE::processOutputNodes
+// Purpose       : determines the GIDs for the nodes specified in the first argument
+//                 of the .NOISE line.
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/31/2025
+// Originally written by Eric Keiter for the NOISE analysis class
+//-----------------------------------------------------------------------------
+void HBNOISE::processOutputNodes ()
+{
+  // setup the names:
+  outputVarNames_.clear();
+  outputVarNames_.push_back(outputNode1_);
+  if (!outputNodeSingle_)
+  {
+    outputVarNames_.push_back(outputNode2_);
+  }
+  int numOutVars = outputVarNames_.size();
+
+  // set up the gid's:
+  int found(0);
+  int found2(0);
+  bool foundLocal(false);
+  bool foundLocal2(false);
+
+  Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
+  Parallel::Communicator &comm = *(pds_manager.getPDSComm());
+
+  outputVarGIDs_.resize( numOutVars, -1 );
+  for (int iout = 0; iout < numOutVars; ++iout)
+  {
+    std::vector<int> svGIDList1, dummyList;
+    char type1;
+    foundLocal = topology_.getNodeSVarGIDs(NodeID(outputVarNames_[iout], Xyce::_VNODE),
+        svGIDList1, dummyList, type1);
+
+    found = static_cast<int>(foundLocal);
+    Xyce::Parallel::AllReduce(comm.comm(), MPI_LOR, &found, 1);
+
+    foundLocal2 = false;
+    if (!found)// if looking for this as a voltage node failed, try a "device" (i.e. current) node.
+    {
+      foundLocal2 = topology_.getNodeSVarGIDs(NodeID(outputVarNames_[iout], Xyce::_DNODE),
+          svGIDList1, dummyList, type1);
+    }
+    found2 = static_cast<int>(foundLocal2);
+    Xyce::Parallel::AllReduce(comm.comm(), MPI_LOR, &found2, 1);
+
+    if (!found && !found2)
+    {
+      Report::UserError() << "Output function variable " << outputVarNames_[iout] << " not found";
+    }
+
+    if (found || found2)
+    {
+      int tmpGID=-1;
+      if(svGIDList1.size()==1)
+      {
+        tmpGID = svGIDList1.front();
+      }
+      outputVarGIDs_[iout] = tmpGID;
+    }
+  }
+}
+
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::updateHarmonicSpaceFreq_()
+// Purpose       :
+// Special Notes :
+//
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/31/2025
+//-----------------------------------------------------------------------------
+bool HBNOISE::updateHarmonicSpaceFreq_()
+{
+  // First diagonal block
+  harmonicSpaceMatrix_->put( 0.0 ); // Zero out whole matrix
+  harmonicSpaceMatrix_->add(*harmonicSpaceMatrixConstant_);
+
+  double omega =  2.0 * M_PI * currentFreq_;
+
+  harmonicSpaceMatrix_omegamC_2_->put( 0.0 );
+  harmonicSpaceMatrix_omegamC_2_->add(*harmonicSpaceMatrix_C_2_);
+  harmonicSpaceMatrix_omegamC_2_->scale(omega);
+
+  harmonicSpaceMatrix_->add(*harmonicSpaceMatrix_omegamC_2_);
+
+  harmonicSpaceMatrix_->assembleGlobalMatrix();
+
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::resetAdjointHBNOISELinearSystem_
+// Purpose       :
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/3/2025
+//-----------------------------------------------------------------------------
+// Now we need to be careful here! We have to set up the adjoint RHS properly.
+// our harmonic space matrix is cosine absolute-referenced.
+// What does it mean? The harmonic space matrix has no information about the phase of the desired carrier and its harmonic number.
+// However, we want to find the sensitivities (in this context the transfer functions) with respect to an output at a given harmonic with the phase provided by the solution.
+// This means, we need to properly project the adjoint RHS to the solution vector.
+// Unfortunately, I have to again write some math so we can follow what is going on.
+// The HB solution at the desired output node has the form of:
+// a = A_I * cos(k*wc*t) - A_Q * sin(k*wc*t)
+// The solution ITSELF should be considered as in-phase. The coefficients a_I and a_Q appear beacuse our mathematical approach is cosine absolute-referenced.
+// Now we reconstruct the solution as
+// a = A * cos(k*wc*t + phi)
+// where :
+// A = sqrt(A_I^2 + A_Q^2)
+// cos(phi) = A_I/A
+// sin(phi) = A_Q/A
+// What does this mean for the Adjoint RHS? Let's look at the form of our desired output-referenced (not absolute-referenced) "objective functions" for the adjoint solve:
+// J = x_I * cos(k*wc*t+phi) - x_Q * sin(k*wc*t+phi)
+// We want to find the sensitivities of x_I and x_Q with respect to the noise sources.
+// So we need to solve two adjoint problems, one for the in-phase component x_I, and one for the quadrature component x_Q.
+// Now we need to derive the RHS for each case and translate J to the cosine absolute-referenced form:
+// J = (x_I * cos(phi) - x_Q * sin(phi)) * cos(k*wc*t) - (x_I * sin(phi) + x_Q * cos(phi)) * sin(k*wc*t)
+// Therefore, for the in-phase component, we need to solve the following adjoint problem:
+// J_I = + x_I * (A_I/A) * cos(k*wc*t) - x_I * (A_Q/A) * sin(k*wc*t)
+// and for the quadrature component, we need to solve the following adjoint problem:
+// J_Q = - x_Q * (A_Q/A) * cos(k*wc*t) - x_Q * (A_I/A) * sin(k*wc*t)
+// We clearly see that J_I and J_Q both have in-phase and quadrature components, since we are now referencing our objective functions to the desired output.
+
+void HBNOISE::resetAdjointHBNOISELinearSystem_(bool quadrature)
+{
+  // clear out the harmonicSpaceX_ vector used by the linear solver.
+  harmonicSpaceX_->putScalar(0.0);
+
+  // setup the harmonicSpaceB_ vector RHS for the adjoint solve:
+  harmonicSpaceB_->putScalar( 0.0 );
+  if (harmonicNumber_ == 0)
+  { // baseband noise
+    // baseband has just in-phase component
+    harmonicSpaceB_->block( 0 ).update( 1.0, *bNoiseVecRealPtr);
+    harmonicSpaceB_->block( 1 ).update( 1.0, *bNoiseVecImagPtr);
+  }
+  else
+  {
+    if (!quadrature)
+    {
+      // RHS is positive
+      harmonicSpaceB_->block( 4*harmonicNumber_ - 2 ).update( +outputValCosPhi_, *bNoiseVecRealPtr);
+      // RHS is negative
+      harmonicSpaceB_->block( 4*harmonicNumber_     ).update( +outputValSinPhi_, *bNoiseVecImagPtr);
+    } else
+    {
+      // RHS is positive
+      harmonicSpaceB_->block( 4*harmonicNumber_ - 2 ).update( -outputValSinPhi_, *bNoiseVecRealPtr);
+      // RHS is negative
+      harmonicSpaceB_->block( 4*harmonicNumber_     ).update( +outputValCosPhi_, *bNoiseVecImagPtr);
+    }
+  }
+  if (DEBUG_ANALYSIS)
+  {
+    Xyce::dout()<<"adjoint noise B vector:"<<std::endl;
+    harmonicSpaceB_->print(Xyce::dout());
+  }
+
+  if (DEBUG_ANALYSIS)
+  {
+    Xyce::dout()<<"harmonic space matrix:"<<std::endl;
+    harmonicSpaceMatrix_->print(Xyce::dout());
+  }
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::solveAdjointHBNOISE_
+// Purpose       : Solves for HBNOISE using the adjoint method.
+// Special Notes : This is the production solve.
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/04/2025
+//-----------------------------------------------------------------------------
+bool HBNOISE::solveAdjointHBNOISE_()
+{
+  bool bsuccess = true;
+  int linearStatus= blockSolver_->solveTranspose();
+  if (linearStatus != 0)
+  {
+    Xyce::dout() << "Linear solve exited with error: " << linearStatus;
+    bsuccess = false;
+  }
+
+  double omega =  2.0 * M_PI * currentFreq_;
+
+  int numNoiseDevices = noiseDataVec_.size();
+  for (int i=0;i<numNoiseDevices;++i)
+  {
+    (noiseDataVec_[i])->omega = omega;
+    (noiseDataVec_[i])->freq = currentFreq_;
+  }
+
+  loader_.getNoiseSources(noiseDataVec_);
+
+  std::vector< Teuchos::RCP<Linear::Vector> > outputVectors;
+  outputVectors.push_back( rcp(linearSystem_.builder().createVector()) );
+  outputVectors.push_back( rcp(linearSystem_.builder().createVector()) );
+
+  copyFromBlockVector( *harmonicSpaceX_, outputVectors );
+  Linear::Vector & Xreal = *(outputVectors[0]);
+  Linear::Vector & Ximag = *(outputVectors[1]);
+
+  if (DEBUG_ANALYSIS)
+  {
+    std::cout << "Xreal: ------------------------------------"<<std::endl;
+    Xreal.print( Xyce::dout() );
+    std::cout << "Ximag: ------------------------------------"<<std::endl;
+    Ximag.print( Xyce::dout() );
+  }
+
+  Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
+  Parallel::Communicator &comm = *(pds_manager.getPDSComm());
+
+  // totalOutputNoiseDens_ = 0.0;
+  // totalInputNoiseDens_ = 0.0;
+  // for (int i=0;i<numNoiseDevices;++i)
+  // {
+  //   int numNoiseThisDevice = noiseDataVec_[i]->numSources;
+
+  //   noiseDataVec_[i]->totalNoise = 0.0;
+  //   noiseDataVec_[i]->totalOutputNoise = 0.0;
+  //   for (int j=0;j<numNoiseThisDevice;++j)
+  //   {
+  //     int li_Pos = noiseDataVec_[i]->li_Pos[j];
+  //     int li_Neg = noiseDataVec_[i]->li_Neg[j];
+  //     int li_PosCorl = noiseDataVec_[i]->li_PosCorl[j];
+  //     int li_NegCorl = noiseDataVec_[i]->li_NegCorl[j];
+  //     double gain = 0.0;
+
+  //     // if two sets of nodes available, calculate correlated gain.
+  //     // otherwise, calculate uncorrelated gain.
+  //     if ((li_PosCorl != -1) && (li_NegCorl != -1))
+  //     {
+  //       double realVal1 = ((li_Pos!=-1)?Xreal[li_Pos]:0) - ((li_Neg!=-1)?Xreal[li_Neg]:0);
+  //       double imagVal1 = ((li_Pos!=-1)?Ximag[li_Pos]:0) - ((li_Neg!=-1)?Ximag[li_Neg]:0);
+  //       double realVal2 = ((li_PosCorl!=-1)?Xreal[li_PosCorl]:0) - ((li_NegCorl!=-1)?Xreal[li_NegCorl]:0);
+  //       double imagVal2 = ((li_PosCorl!=-1)?Ximag[li_PosCorl]:0) - ((li_NegCorl!=-1)?Ximag[li_NegCorl]:0);
+  //       double realOut = noiseDataVec_[i]->T0 * realVal1 + noiseDataVec_[i]->T2 * realVal2 - noiseDataVec_[i]->T3 * imagVal2;
+  //       double imagOut = noiseDataVec_[i]->T0 * imagVal1 + noiseDataVec_[i]->T2 * imagVal2 + noiseDataVec_[i]->T3 * realVal2;
+  //       gain = (realOut*realOut) + (imagOut*imagOut);
+  //     }
+  //     else
+  //     {
+  //       double realVal = ((li_Pos!=-1)?Xreal[li_Pos]:0) - ((li_Neg!=-1)?Xreal[li_Neg]:0);
+  //       double imagVal = ((li_Pos!=-1)?Ximag[li_Pos]:0) - ((li_Neg!=-1)?Ximag[li_Neg]:0);
+  //       gain = (realVal*realVal) + (imagVal*imagVal);
+  //     }
+
+  //     noiseDataVec_[i]->totalNoise += fabs(noiseDataVec_[i]->noiseDens[j]);
+  //     noiseDataVec_[i]->outputNoiseDens[j] = gain * fabs(noiseDataVec_[i]->noiseDens[j]);
+  //     noiseDataVec_[i]->lnNoiseDens[j] = std::log(std::max( noiseDataVec_[i]->outputNoiseDens[j],N_MINLOG) );
+  //     noiseDataVec_[i]->inputNoiseDens[j] = noiseDataVec_[i]->outputNoiseDens[j] * GainSqInv_;
+  //     noiseDataVec_[i]->totalOutputNoise += noiseDataVec_[i]->outputNoiseDens[j];
+  //   }
+  //   noiseDataVec_[i]->totalInputNoise = noiseDataVec_[i]->totalOutputNoise * GainSqInv_;
+  //   totalOutputNoiseDens_ += noiseDataVec_[i]->totalOutputNoise;
+  // }
+  // Xyce::Parallel::AllReduce(comm.comm(), MPI_SUM, &totalOutputNoiseDens_, 1);
+  // totalInputNoiseDens_ += totalOutputNoiseDens_ * GainSqInv_;
+
+  // if (comm.isSerial() )
+  // {
+  //   // FIX:  replace this output call!
+  //   hackTecplotOutput();
+  // }
+
+  return bsuccess;
+}
 //-----------------------------------------------------------------------------
 // Function      : HBNOISE::createHarmonicSpaceLinearSystem_
 // Purpose       : Creates the harmonic coupled matrix based on LTV system
@@ -411,7 +950,7 @@ bool HBNOISE::doLoopProcess()
 // G_ij * V_jC*cos(w*t) - G_ij * V_jS*sin(w*t) + C_ij * (-w*V_jC*sin(w*t) - w*V_jS*cos(w*t)) = B_iC*cos(w*t) - B_iS*sin(w*t)
 // This gives us the famous matrix equation:
 // G_ij * V_jC - w * C_ij * V_jS = B_iC
-// G_ij * V_jS + w * C_ij * V_jC = B_iS
+// w * C_ij * V_jC + G_ij * V_jS  = B_iS
 //-----------------------------------------------------------------------------
 //                     for Harmonic space system (with Einstein convention):
 // G_ij(t) = G_ij0 + G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) // sum over f
@@ -492,7 +1031,7 @@ bool HBNOISE::doLoopProcess()
 
 // This approach gives us the desired format:
 // ( [G] + [omega*C, PART 0] + [omega*C, PART 1] + wm*[C, PART 2] ) * v = b
-// The matrices will be calculated once, of for each offset frequency PART 2 will be scaled with wm and added to the matrix.
+// The matrices will be calculated once, for each offset frequency PART 2 will be scaled with wm and added to the matrix.
 
 
 bool HBNOISE::createHarmonicSpaceLinearSystem_(){
@@ -511,17 +1050,18 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
   }
   if (DEBUG_HBNOISE)
   {
-    Xyce::dout() << "Reporting Gf_ Matrices, each block is a node" << std::endl;
+    Xyce::dout() << "Reporting Gf_ Matrices, each array element is a row of the matrix, each block is a node" << std::endl;
     for (int i=0; i<BlockSize; i++){
       Xyce::dout() << "Gf_[" << i << "]: " << std::endl;
       Gf_[i]->print(Xyce::dout());
       Xyce::dout() << std::endl;
     }
-    //for (int i=0; i<BlockSize_; i++){
-    //  Xyce::dout() << "Cf_[" << i << "]: " << std::endl;
-    //  Cf_[i]->print(Xyce::dout());
-    //  Xyce::dout() << std::endl;
-    //}
+    Xyce::dout() << "Reporting Cf_ Matrices, each array element is a row of the matrix, each block is a node" << std::endl;
+    for (int i=0; i<BlockSize; i++){
+      Xyce::dout() << "Cf_[" << i << "]: " << std::endl;
+      Cf_[i]->print(Xyce::dout());
+      Xyce::dout() << std::endl;
+    }
   }
 
   Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
@@ -535,6 +1075,7 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
 
   RCP<Parallel::ParMap> blockMap = Linear::createBlockParMap(numBlocks, *baseMap, 0, 0, offset);
   harmonicSpaceB_ = Xyce::Linear::createBlockVector(numBlocks, blockMap, baseMap);
+  harmonicSpaceB_->putScalar(0.0);
 
   std::vector<std::vector<int> > blockPattern(numBlocks);
   for (int i=0; i<numBlocks; i++){
@@ -545,59 +1086,140 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
   }
 
   RCP<Linear::Graph> blockGraph = Linear::createBlockGraph( offset, blockPattern, *blockMap, *baseFullGraph);
+
+  // There will be 4 fundamental Matrices to be created:
+  // harmonicSpaceMatrix_G_        : G matrix in harmonic space
+  // harmonicSpaceMatrix_omegaC_0_ : wc*dC/dt matrix in harmonic space
+  // harmonicSpaceMatrix_omegaC_1_ : wc*C*dv/dt matrix in harmonic space
+  // harmonicSpaceMatrix_C_2_      : wm*C*dv/dt matrix in harmonic space
+  // The master equation is: 
+  // ( [G] + [omegaC, PART 0] + [omegaC, PART 1] + wm*[C, PART 2] ) * v = b
+  // The first 3 matrices on LHS are not functions of offset frequency, they are constant.
+  // The last matrix is a function of offset frequency, it is the only matrix that changes with offset frequency.
+  // So I define a new Matrix to sum the first 3 matrices: 
+  // harmonicSpaceMatrixConstant_ = [G] + [omegaC, PART 0] + [omegaC, PART 1]
+  // the master equation becomes:
+  // ( harmonicSpaceMatrixConstant_ + wm*[C, PART 2] ) * v = b
+  // the sum of these two matrices is the overall matrix to be solved for:
+  // harmonicSpaceMatrix_ = harmonicSpaceMatrixConstant_ + wm*[C, PART 2]
+
+  harmonicSpaceMatrix_G_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  updateHarmonicSpaceMatrix_G_();
+
+  harmonicSpaceMatrix_omegaC_0_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  updateHarmonicSpaceMatrix_omegaC_0_();
+
+  harmonicSpaceMatrix_omegaC_1_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  updateHarmonicSpaceMatrix_omegaC_1_();
+
+  harmonicSpaceMatrix_C_2_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  updateHarmonicSpaceMatrix_C_2_();
+
+  // this will be used in the frequency loop
+  harmonicSpaceMatrix_omegamC_2_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceMatrix_omegamC_2_->put( 0.0 );
+  
+  if (DEBUG_HBNOISE)
+  {
+    Xyce::dout() << "Reporting harmonicSpaceMatrix_G_:" << std::endl;
+    harmonicSpaceMatrix_G_->print(Xyce::dout());
+    Xyce::dout() << "Reporting harmonicSpaceMatrix_omegaC_0_:" << std::endl;
+    harmonicSpaceMatrix_omegaC_0_->print(Xyce::dout());
+    Xyce::dout() << "Reporting harmonicSpaceMatrix_omegaC_1_:" << std::endl;
+    harmonicSpaceMatrix_omegaC_1_->print(Xyce::dout());
+    Xyce::dout() << "Reporting harmonicSpaceMatrix_C_2_:" << std::endl;
+    harmonicSpaceMatrix_C_2_->print(Xyce::dout());
+    Xyce::dout() << std::endl;
+  }
+
+  // This will be the overal matrix to be solved for.
   harmonicSpaceMatrix_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
   harmonicSpaceMatrix_->put( 0.0 ); 
 
-  // I currently do it in a loop iteration. But I think it will be easier using tensors. Fourier transform of G_
-  // is a tensor of rank 3. We can use a tranformation tensor to get the harmonic space G matrix.
-  // Ct_ is also a tensor:
-  //
-  //     Gt_ (or Ct_) tensor            Fourier matrix             Gf_ (or Cf_) tensor    
-  //
-  //           ---------|                 \    /                        \-------\           
-  //  time->  /       / |          freq->  \  / <-time                  |\       \  <-freq
-  //         /-------/  |    *              \/             =            \ \-------\  
-  //  node-> | Ct/Gt | /                                         node->  \| Cf/Gf |   
-  //         |-------|/                                                   \-------|   
-  //             ^                                                            ^        
-  //           node                                                          node       
-  //
-  // I think an interesting approach would be to find a way to transform the Gf_ tensor to a flat matrix for the harmonic space.
-  // If we properly write the upper and lower rank indices, we have:
-  // Gf_{jkf} : j,k are members of {0-N}, f is member of {0-numHarms}, where N = GIDmax
-  // G_{j'k'} : j',k' are members of {0-N'} where N'=GIDmax*(2+4*numHarms)
-  // From a purely mathematical point of view, it would be interesting to find the form of harmonic space tranformation tensor, HST:
-  // HST_{j',k'}^{j,k,f}
-  // which has lower rank of 2 and upper rank of 3. Multiplying Gf tensor with HST tensor directly gives harmonic space matrix
-  // The elements of HST are most likey just 0, +-1, +-0.5 but this requires further formulation.
+  // This is the constant part of the matrix, it is the sum of the first 3 matrices:
+  harmonicSpaceMatrixConstant_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceMatrixConstant_->put( 0.0 ); 
+  harmonicSpaceMatrixConstant_->add( *harmonicSpaceMatrix_G_ );
+  harmonicSpaceMatrixConstant_->add( *harmonicSpaceMatrix_omegaC_0_ );
+  harmonicSpaceMatrixConstant_->add( *harmonicSpaceMatrix_omegaC_1_ );
 
-  // Let's start with G matrix, it is easier!
-  // Gf_ strucure: std::vector with GID elements, each element has GID blocks, each block has real/imag freq points
-  // the frequency points are in total 2*size_ = 2 * (2*numberOfHarmonics + 1)
-  // 0: dc real
-  // 1: dc imag
-  // 2: 1st harmonic real 
-  // 3: 1st harmonic imag etc.
 
-  // Harmonic space structure:
-  // TBD
-  // 
-  harmonicSpaceMatrix_G_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+  harmonicSpaceX_ = Xyce::Linear::createBlockVector (numBlocks, blockMap, baseMap);
+  harmonicSpaceX_->putScalar( 0.0 );
+
+  harmonicSpace_SavedX_ = Xyce::Linear::createBlockVector (numBlocks, blockMap, baseMap);
+  harmonicSpace_SavedX_->putScalar( 0.0 );
+
+  blockProblem_ = Xyce::Linear::createProblem( harmonicSpaceMatrix_, harmonicSpaceX_, harmonicSpaceB_ );
+
+  Linear::TranSolverFactory factory;
+  blockSolver_ = factory.create( linSolOptionBlock_, *blockProblem_, analysisManager_.getCommandLine() );
+
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::updateHarmonicSpaceMatrix_G_()
+// Purpose       : Updates G matrix in harmonic space
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/30/2025
+//-----------------------------------------------------------------------------
+// I currently find the harmonic space matrices in a loop iteration. But I think it will be easier using tensors. Fourier transform of G_
+// is a tensor of rank 3. We can use a tranformation tensor to get the harmonic space G matrix.
+// Ct_ is also a tensor:
+//
+//     Gt_ (or Ct_) tensor                     Fourier matrix                       Gf_ (or Cf_) tensor    
+//
+//           ---------|                          \    /                                  \-------\           
+//  time->  /       / |         freq expansion->  \  / <-time compression                |\       \  <-freq
+//         /-------/  |    *                       \/                       =            \ \-------\  
+//  node-> | Ct/Gt | /                                                            node->  \| Cf/Gf |   
+//         |-------|/                                                                      \-------|   
+//             ^                                                                               ^        
+//           node                                                                             node       
+//
+// I think an interesting approach would be to find a way to transform the Gf_ tensor to a flat matrix for the harmonic space.
+// If we properly write the upper and lower rank indices, we have:
+// Gf_{jkf} : j,k are members of {0-N}, f is member of {0-numHarms}, where N = GIDmax
+// G_{j'k'} : j',k' are members of {0-N'} where N'=GIDmax*(2+4*numHarms)
+// From a purely mathematical point of view, it would be interesting to find the form of harmonic space tranformation tensor, HST:
+// HST_{j',k'}^{j,k,f}
+// which has lower rank of 2 and upper rank of 3. Multiplying Gf tensor with HST tensor directly gives harmonic space matrix
+// The elements of HST are most likey just 0, +-1, +-0.5 but this requires further formulation.
+
+// Let's start with G matrix, it is easier!
+// Gf_ strucure: std::vector with GID elements (each element corresponds to a row of Gf matrix), each element has GID blocks, each block has real/imag freq points
+// the frequency points are in total 2*size_ = 2 * (2*numberOfHarmonics + 1)
+// 0: dc real
+// 1: dc imag
+// 2: 1st harmonic real 
+// 3: 1st harmonic imag etc.
+
+bool HBNOISE::updateHarmonicSpaceMatrix_G_()
+{
   harmonicSpaceMatrix_G_->put( 0.0 );
+  int numHarms = (size_-1)/2;
+  int numBlocks = 2 + 4 * numHarms;
   int numRows = Gf_.size();
 
   for (int i=0; i<numRows; i++)
   { // selectring a row of G Matrix
+    // we should select only non-zero columns, But vectors are not treated like matrices and I can't get a view of augmented indices.
+    // So I currently do a zero checking. This approach should be optimized.
     for (int j=0; j<numRows; j++)
     { // selecting a column of G Matrix
       for (int f=0; f<=numHarms; f++)
       { // selecting a frequency point of Gf_
+        // zero checking
+        if ( Gf_[i]->block(j)[2*f] == 0.0 && Gf_[i]->block(j)[2*f+1] == 0.0 )
+        { continue; }
         // now we fill the matrix
         // first the diagon of G matrix
         if (f==0)
         { // linear transformation
           for (int l=0; l<numBlocks; l++){
-            harmonicSpaceMatrix_G_->block(l,l)[i][j] = Gf_[i]->block(j)[0];
+            setMatrixElement(harmonicSpaceMatrix_G_->block(l,l), i, j, Gf_[i]->block(j)[0]);
           }
         } else
         { // now the mixing parts (harmonic coupling)
@@ -611,19 +1233,22 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
 
               // + G_ijfI*cos(f*wc*t) * V_jC*cos(wm*t)
               // RHS has positive sign
-              harmonicSpaceMatrix_G_->block(4*f-2,0)[i][j] = +2*Gf_[i]->block(j)[2*f]; // in-phase cosine
+              setMatrixElement(harmonicSpaceMatrix_G_->block(4*f-2,0), i, j, +2*Gf_[i]->block(j)[2*f]); // in-phase cosine
 
               // - G_ijfI*cos(f*wc*t) * V_jS*sin(wm*t)
               // RHS has negative sign
-              harmonicSpaceMatrix_G_->block(4*f-1,0)[i][j] = +2*Gf_[i]->block(j)[2*f]; // in-phase sine
+              // harmonicSpaceMatrix_G_->block(4*f-1,0)[i][j] = +2*Gf_[i]->block(j)[2*f]; // in-phase sine
+              setMatrixElement(harmonicSpaceMatrix_G_->block(4*f-1,0), i, j, +2*Gf_[i]->block(j)[2*f]); // in-phase sine
 
               // - G_ijfQ*sin(f*wc*t) * V_jC*cos(wm*t)
               // RHS has positive sign
-              harmonicSpaceMatrix_G_->block(4*f  ,0)[i][j] = -2*Gf_[i]->block(j)[2*f+1]; // quadrature cosine
+              // harmonicSpaceMatrix_G_->block(4*f  ,0)[i][j] = -2*Gf_[i]->block(j)[2*f+1]; // quadrature cosine
+              setMatrixElement(harmonicSpaceMatrix_G_->block(4*f  ,0), i, j, -2*Gf_[i]->block(j)[2*f+1]); // quadrature cosine
 
               // + G_ijfQ*sin(f*wc*t) * V_jS*sin(wm*t)
               // RHS has negative sign
-              harmonicSpaceMatrix_G_->block(4*f+1,0)[i][j] = -2*Gf_[i]->block(j)[2*f+1]; // quadrature sine
+              // harmonicSpaceMatrix_G_->block(4*f+1,0)[i][j] = -2*Gf_[i]->block(j)[2*f+1]; // quadrature sine
+              setMatrixElement(harmonicSpaceMatrix_G_->block(4*f+1,0), i, j, -2*Gf_[i]->block(j)[2*f+1]); // quadrature sine
             } else 
             { // now f>0 and e>0
               // [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) ]
@@ -640,26 +1265,26 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
                 // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
                 // + 0.5*G_ijfI*cos(sigma*wc*t) * V_jeIC*cos(wm*t) - 0.5*G_ijfQ*cos(sigma*wc*t) * V_jeQC*cos(wm*t)
                 // RHS has positive sign
-                harmonicSpaceMatrix_G_->block(4*sigma-2, 4*e-2)[i][j] = +Gf_[i]->block(j)[2*f  ]; // in-phase cosine translated from in-phase cosine by in-phase G
-                harmonicSpaceMatrix_G_->block(4*sigma-2, 4*e  )[i][j] = -Gf_[i]->block(j)[2*f+1]; // in-phase cosine translated from quadrature cosine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*sigma-2, 4*e-2), i, j, +Gf_[i]->block(j)[2*f  ]); // in-phase cosine translated from in-phase cosine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*sigma-2, 4*e  ), i, j, -Gf_[i]->block(j)[2*f+1]); // in-phase cosine translated from quadrature cosine by quadrature G
 
                 // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
                 // - 0.5*G_ijfI*cos(sigma*wc*t) * V_jeIS*sin(wm*t) + 0.5*G_ijfQ*cos(sigma*wc*t) * V_jeQS*sin(wm*t)
                 // RHS has negative sign
-                harmonicSpaceMatrix_G_->block(4*sigma-1,4*e-1)[i][j] = +Gf_[i]->block(j)[2*f  ]; // in-phase sine translated from in-phase sine by in-phase G
-                harmonicSpaceMatrix_G_->block(4*sigma-1,4*e+1)[i][j] = -Gf_[i]->block(j)[2*f+1]; // in-phase sine translated from quadrature sine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*sigma-1,4*e-1), i, j, +Gf_[i]->block(j)[2*f  ]); // in-phase sine translated from in-phase sine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*sigma-1,4*e+1), i, j, -Gf_[i]->block(j)[2*f+1]); // in-phase sine translated from quadrature sine by quadrature G
 
                 // - G_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t)
                 // - 0.5*G_ijfI*sin(sigma*wc*t) * V_jeQC*cos(wm*t) - 0.5*G_ijfQ*sin(sigma*wc*t) * V_jeIC*cos(wm*t)
                 // RHS has positive sign
-                harmonicSpaceMatrix_G_->block(4*sigma  ,4*e  )[i][j] = -Gf_[i]->block(j)[2*f  ]; // quadrature cosine translated from quadrature cosine by in-phase G
-                harmonicSpaceMatrix_G_->block(4*sigma  ,4*e-2)[i][j] = -Gf_[i]->block(j)[2*f+1]; // quadrature cosine translated from in-phase cosine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*sigma  ,4*e  ), i, j, -Gf_[i]->block(j)[2*f  ]); // quadrature cosine translated from quadrature cosine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*sigma  ,4*e-2), i, j, -Gf_[i]->block(j)[2*f+1]); // quadrature cosine translated from in-phase cosine by quadrature G
 
                 // + G_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t)
                 // + 0.5*G_ijfI*sin(sigma*wc*t) * V_jeQS*sin(wm*t) + 0.5*G_ijfQ*sin(sigma*wc*t) * V_jeIS*sin(wm*t)
                 // RHS has negative sign
-                harmonicSpaceMatrix_G_->block(4*sigma+1,4*e+1)[i][j] = -Gf_[i]->block(j)[2*f  ]; // quadrature sine translated from quadrature sine by in-phase G
-                harmonicSpaceMatrix_G_->block(4*sigma+1,4*e-1)[i][j] = -Gf_[i]->block(j)[2*f+1]; // quadrature sine translated from in-phase sine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*sigma+1,4*e+1), i, j, -Gf_[i]->block(j)[2*f  ]); // quadrature sine translated from quadrature sine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*sigma+1,4*e-1), i, j, -Gf_[i]->block(j)[2*f+1]); // quadrature sine translated from in-phase sine by quadrature G
               }
 
               // case delta
@@ -670,40 +1295,40 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
                 // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
                 // + 0.5*G_ijfI * V_jeIC*cos(wm*t) + 0.5*G_ijfQ * V_jeQC*cos(wm*t)
                 // RHS has positive sign
-                harmonicSpaceMatrix_G_->block(0, 4*e-2)[i][j] = +Gf_[i]->block(j)[2*f  ]; // baseband cosine translated from in-phase cosine by in-phase G
-                harmonicSpaceMatrix_G_->block(1, 4*e  )[i][j] = +Gf_[i]->block(j)[2*f+1]; // baseband cosine translated from quadrature cosine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(0, 4*e-2), i, j, +Gf_[i]->block(j)[2*f  ]); // baseband cosine translated from in-phase cosine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(1, 4*e  ), i, j, +Gf_[i]->block(j)[2*f+1]); // baseband cosine translated from quadrature cosine by quadrature G
 
                 // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
                 // - 0.5*G_ijfI * V_jeIS*sin(wm*t) - 0.5*G_ijfQ * V_jeQS*sin(wm*t)
                 // RHS has negative sign
-                harmonicSpaceMatrix_G_->block(0, 4*e-1)[i][j] = +Gf_[i]->block(j)[2*f  ]; // baseband sine translated from in-phase sine by in-phase G
-                harmonicSpaceMatrix_G_->block(1, 4*e+1)[i][j] = +Gf_[i]->block(j)[2*f+1]; // baseband sine translated from quadrature sine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(0, 4*e-1), i, j, +Gf_[i]->block(j)[2*f  ]); // baseband sine translated from in-phase sine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(1, 4*e+1), i, j, +Gf_[i]->block(j)[2*f+1]); // baseband sine translated from quadrature sine by quadrature G
               }
               else
               {
                 // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
                 // + 0.5*G_ijfI*cos(delta*wc*t) * V_jeIC*cos(wm*t) + 0.5*G_ijfQ*cos(delta*wc*t) * V_jeQC*cos(wm*t)
                 // RHS has positive sign
-                harmonicSpaceMatrix_G_->block(4*deltaAbs-2, 4*e-2)[i][j] = +Gf_[i]->block(j)[2*f  ]; // in-phase cosine translated from in-phase cosine by in-phase G
-                harmonicSpaceMatrix_G_->block(4*deltaAbs-2, 4*e  )[i][j] = +Gf_[i]->block(j)[2*f+1]; // in-phase cosine translated from quadrature cosine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*deltaAbs-2, 4*e-2), i, j, +Gf_[i]->block(j)[2*f  ]); // in-phase cosine translated from in-phase cosine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*deltaAbs-2, 4*e  ), i, j, +Gf_[i]->block(j)[2*f+1]); // in-phase cosine translated from quadrature cosine by quadrature G
 
                 // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
                 // - 0.5*G_ijfI*cos(delta*wc*t) * V_jeIS*sin(wm*t) - 0.5*G_ijfQ*cos(delta*wc*t) * V_jeQS*sin(wm*t)
                 // RHS has negative sign
-                harmonicSpaceMatrix_G_->block(4*deltaAbs-1,4*e-1)[i][j] = +Gf_[i]->block(j)[2*f  ]; // in-phase sine translated from in-phase sine by in-phase G
-                harmonicSpaceMatrix_G_->block(4*deltaAbs-1,4*e+1)[i][j] = +Gf_[i]->block(j)[2*f+1]; // in-phase sine translated from quadrature sine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*deltaAbs-1,4*e-1), i, j, +Gf_[i]->block(j)[2*f  ]); // in-phase sine translated from in-phase sine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*deltaAbs-1,4*e+1), i, j, +Gf_[i]->block(j)[2*f+1]); // in-phase sine translated from quadrature sine by quadrature G
 
                 // - G_ijfI*cos(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t)
                 // + 0.5*G_ijfI*sin(delta*wc*t) * V_jeQC*cos(wm*t) - 0.5*G_ijfQ*sin(delta*wc*t) * V_jeIC*cos(wm*t)
                 // RHS has positive sign
-                harmonicSpaceMatrix_G_->block(4*deltaAbs  ,4*e  )[i][j] = +sign*Gf_[i]->block(j)[2*f  ]; // quadrature cosine translated from quadrature cosine by in-phase G
-                harmonicSpaceMatrix_G_->block(4*deltaAbs  ,4*e-2)[i][j] = -sign*Gf_[i]->block(j)[2*f+1]; // quadrature cosine translated from in-phase cosine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*deltaAbs  ,4*e  ), i, j, +sign*Gf_[i]->block(j)[2*f  ]); // quadrature cosine translated from quadrature cosine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*deltaAbs  ,4*e-2), i, j, -sign*Gf_[i]->block(j)[2*f+1]); // quadrature cosine translated from in-phase cosine by quadrature G
 
                 // + G_ijfI*cos(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t)
                 // - 0.5*G_ijfI*sin(delta*wc*t) * V_jeQS*sin(wm*t) + 0.5*G_ijfQ*sin(delta*wc*t) * V_jeIS*sin(wm*t)
                 // RHS has negative sign
-                harmonicSpaceMatrix_G_->block(4*deltaAbs+1,4*e+1)[i][j] = +sign*Gf_[i]->block(j)[2*f  ]; // quadrature sine translated from quadrature sine by in-phase G
-                harmonicSpaceMatrix_G_->block(4*deltaAbs+1,4*e-1)[i][j] = -sign*Gf_[i]->block(j)[2*f+1]; // quadrature sine translated from in-phase sine by quadrature G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*deltaAbs+1,4*e+1), i, j, +sign*Gf_[i]->block(j)[2*f  ]); // quadrature sine translated from quadrature sine by in-phase G
+                setMatrixElement(harmonicSpaceMatrix_G_->block(4*deltaAbs+1,4*e-1), i, j, -sign*Gf_[i]->block(j)[2*f+1]); // quadrature sine translated from in-phase sine by quadrature G
 
               }
             } // end of f>0 and e>0
@@ -713,28 +1338,42 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
     } // end of column loop
   } // end of row loop
   // And this was just for G matrix. Now we have to do the same for three parts of C matrix and we have to deal with derivatives too!
-  
-  // **************************************************
-  //           C Matrix PART 0: dC(t)/dt
-  // **************************************************
-  // This part behaves like G matrix. We just need to use time-derivative of C matrix instead of G matrix.
-  // We do the time-derivative in frequency domain.
-  // we have
-  // C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t)            // sum over f
-  // dC_ij(t)/dt = - f*wc*C_ijfQ*cos(f*wc*t) - f*wc*C_ijfI*sin(f*wc*t)     // sum over f
-  // So I have to the same thing as G, but use 
-  // Gf_[i]->block(j)[2*f  ] -> -f*wc*Cf_[i]->block(j)[2*f+1]
-  // Gf_[i]->block(j)[2*f+1] -> +f*wc*Cf_[i]->block(j)[2*f  ]
-  // The only good news is that the linear transformation is now zero (well, I mean that tiny loop!)
-  harmonicSpaceMatrix_omegaC_0_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
-  harmonicSpaceMatrix_omegaC_0_->put( 0.0 );
+  return true;
+}
 
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::updateHarmonicSpaceMatrix_omegaC_0_()
+// Purpose       : Updates omegaC_0 matrix in harmonic space
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/30/2025
+//-----------------------------------------------------------------------------
+// **************************************************
+//           C Matrix PART 0: dC(t)/dt
+// **************************************************
+// This part behaves like G matrix. We just need to use time-derivative of C matrix instead of G matrix.
+// We do the time-derivative in frequency domain.
+// we have
+// C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t)            // sum over f
+// dC_ij(t)/dt = - f*wc*C_ijfQ*cos(f*wc*t) - f*wc*C_ijfI*sin(f*wc*t)     // sum over f
+// So I have to the same thing as G, but use 
+// Gf_[i]->block(j)[2*f  ] -> -f*wc*Cf_[i]->block(j)[2*f+1]
+// Gf_[i]->block(j)[2*f+1] -> +f*wc*Cf_[i]->block(j)[2*f  ]
+// The only good news is that the linear transformation is now zero (well, I mean that tiny loop!)
+bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_0_()
+{
+  harmonicSpaceMatrix_omegaC_0_->put( 0.0 );
+  int numHarms = (size_-1)/2;
+  int numBlocks = 2 + 4 * numHarms;
+  int numRows = Cf_.size();
   for (int i=0; i<numRows; i++)
   { // selectring a row of G Matrix
     for (int j=0; j<numRows; j++)
     { // selecting a column of G Matrix
       for (int f=0; f<=numHarms; f++)
       { // selecting a frequency point of Gf_
+        if ( Cf_[i]->block(j)[2*f] == 0.0 && Cf_[i]->block(j)[2*f+1] == 0.0 )
+        { continue; }
         // now we fill the matrix
         // first the diagon of omega*C matrix
         if (f==0)
@@ -855,36 +1494,48 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
       } // end of f loop of Gf_
     } // end of column loop
   } // end of row loop
+  return true;
+}
 
-  // These patterns are really ugly! I wish I could put them into a function. Probably it needs someone smarter than me to do it!
-  // Now the real ugly equations start! C Matrix PART 1 and C Matrix PART 2
-  // The time derivative makes very confusing equations, an additinal quadrature transformation, both for carrier and modulated components.
-
-  // **************************************************
-  //           C Matrix PART 1: 
-  // **************************************************
-  // Reminder:
-  // C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) // sum over f
-  // v_j(t) has the form of
-  // v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
-  // PART 1 scales with wc and performs cross-harmonic quadrature transformation:
-  // dv_j/dt |1 = - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*e*wc*sin(e*wc*t) - ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*e*wc*cos(e*wc*t)
-  // dv_j/dt |1 = [ - ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*cos(e*wc*t) - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*sin(e*wc*t) ]*e*wc
-  // First observation: dv_j/dt |1 has no baseband component => the first two column blocks of PART 1 are 0.
-  // This equation has also some similarities with the equation of G Matrix, in the sense that the wm parts are intact. 
-  // However, we have " quadrature <=> in-phase " transformation because of derivative with respect to carrier component.
-  // So we can use the same pattern of filling G matrix, but this time we need to swap in-phase and quadrature components.
-  // for instance, row 0 goes to row 1 and row 1 goes to row 0.
-  // which parameters should be swapped to reuse the G matrix loop?
-  harmonicSpaceMatrix_omegaC_1_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
+// Purpose       : Updates omegaC_1 matrix in harmonic space
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/30/2025
+//-----------------------------------------------------------------------------
+// These patterns are really ugly! I wish I could put them into a function. Probably it needs someone smarter than me to do it!
+// Now the real ugly equations start! C Matrix PART 1 and C Matrix PART 2
+// The time derivative makes very confusing equations, an additinal quadrature transformation, both for carrier and modulated components.
+// **************************************************
+//           C Matrix PART 1: 
+// **************************************************
+// Reminder:
+// C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) // sum over f
+// v_j(t) has the form of
+// v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
+// PART 1 scales with wc and performs cross-harmonic quadrature transformation:
+// dv_j/dt |1 = - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*e*wc*sin(e*wc*t) - ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*e*wc*cos(e*wc*t)
+// dv_j/dt |1 = [ - ( V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t) )*cos(e*wc*t) - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*sin(e*wc*t) ]*e*wc
+// First observation: dv_j/dt |1 has no baseband component => the first two column blocks of PART 1 are 0.
+// This equation has also some similarities with the equation of G Matrix, in the sense that the wm parts are intact. 
+// However, we have " quadrature <=> in-phase " transformation because of derivative with respect to carrier component.
+// So we can use the same pattern of filling G matrix, but this time we need to swap in-phase and quadrature components.
+// for instance, row 0 goes to row 1 and row 1 goes to row 0.
+bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
+{
   harmonicSpaceMatrix_omegaC_1_->put( 0.0 );
-
+  int numHarms = (size_-1)/2;
+  int numBlocks = 2 + 4 * numHarms;
+  int numRows = Cf_.size();
   for (int i=0; i<numRows; i++)
   { // selectring a row of C Matrix
     for (int j=0; j<numRows; j++)
     { // selecting a column of C Matrix
       for (int f=0; f<=numHarms; f++)
       { // selecting a frequency point of Cf_
+        if ( Cf_[i]->block(j)[2*f] == 0.0 && Cf_[i]->block(j)[2*f+1] == 0.0 )
+        { continue; }
         // now we fill the matrix
         if (f==0)
         { // linear transformation
@@ -996,27 +1647,41 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
       } // end of f loop of Gf_
     } // end of column loop
   } // end of row loop
+  return true;
+}
 
-  // **************************************************
-  //           C Matrix PART 2: 
-  // **************************************************
-  // Reminder:
-  // C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) // sum over f
-  // v_j(t) has the form of
-  // v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
-  // PART 2 scales with wm and performs same-harmonic transformation of sine<=>cosine components. You can think of it as real<=>imaginary transformation.
-  // dv_j/dt |2 = - wm*V_jC*sin(wm*t) - wm*V_jS*cos(wm*t) + wm * ( - V_jeIC*sin(wm*t) - V_jeIS*cos(wm*t) )*cos(e*wc*t) - wm * ( - V_jeQC*sin(wm*t) - V_jeQS*cos(wm*t) )*sin(e*wc*t) 
-  // (1/wm)*dv_j/dt |2 = - V_jS*cos(wm*t) - V_jC*sin(wm*t) + ( - V_jeIS*cos(wm*t) - V_jeIC*sin(wm*t) )*cos(e*wc*t) - ( - V_jeQS*cos(wm*t) - V_jeQC*sin(wm*t) )*sin(e*wc*t) 
-  // This matrix has also similar signature to G, but is does inner-harmonic transformation.
-  harmonicSpaceMatrix_C_2_ = Xyce::Linear::createBlockMatrix( numBlocks, offset, blockPattern, blockGraph.get(), baseFullGraph);
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::updateHarmonicSpaceMatrix_C_2_()
+// Purpose       : Updates C_2 matrix in harmonic space
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/30/2025
+//-----------------------------------------------------------------------------
+// **************************************************
+//           C Matrix PART 2: 
+// **************************************************
+// Reminder:
+// C_ij(t) = C_ij0 + C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) // sum over f
+// v_j(t) has the form of
+// v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
+// PART 2 scales with wm and performs same-harmonic transformation of sine<=>cosine components. You can think of it as real<=>imaginary transformation.
+// dv_j/dt |2 = - wm*V_jC*sin(wm*t) - wm*V_jS*cos(wm*t) + wm * ( - V_jeIC*sin(wm*t) - V_jeIS*cos(wm*t) )*cos(e*wc*t) - wm * ( - V_jeQC*sin(wm*t) - V_jeQS*cos(wm*t) )*sin(e*wc*t) 
+// (1/wm)*dv_j/dt |2 = - V_jS*cos(wm*t) - V_jC*sin(wm*t) + ( - V_jeIS*cos(wm*t) - V_jeIC*sin(wm*t) )*cos(e*wc*t) - ( - V_jeQS*cos(wm*t) - V_jeQC*sin(wm*t) )*sin(e*wc*t) 
+// This matrix has also similar signature to G, but is does inner-harmonic transformation.
+bool HBNOISE::updateHarmonicSpaceMatrix_C_2_() 
+{
   harmonicSpaceMatrix_C_2_->put( 0.0 );
-
+  int numHarms = (size_-1)/2;
+  int numBlocks = 2 + 4 * numHarms;
+  int numRows = Cf_.size();
   for (int i=0; i<numRows; i++)
   { // selectring a row of C Matrix
     for (int j=0; j<numRows; j++)
     { // selecting a column of C Matrix
       for (int f=0; f<=numHarms; f++)
       { // selecting a frequency point of Cf_
+        if ( Cf_[i]->block(j)[2*f] == 0.0 && Cf_[i]->block(j)[2*f+1] == 0.0 )
+        { continue; }
         // now we fill the matrix
         // first the diagon of G matrix
         if (f==0)
@@ -1162,15 +1827,6 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
       } // end of f loop of Gf_
     } // end of column loop
   } // end of row loop
-
-
-
-  harmonicSpaceB_->putScalar( 0.0 );
-  harmonicSpaceB_->block( 0 ).update( 1.0, *bVecRealPtr);
-  harmonicSpaceB_->block( 1 ).update( 1.0, *bVecImagPtr);
-
-
-  // now take the Fourier Transform of Ct_ and Gt_
   return true;
 }
 
@@ -1196,6 +1852,40 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
   // b means to "block"
   Linear::Vector *Xf = analysisManager_.getDataStore()->currSolutionPtr;
   Linear::BlockVector & bXf = *dynamic_cast<Linear::BlockVector*>(Xf);
+
+  // first store the output node results
+  {
+    double v1r = 0.0;
+    double v1i = 0.0;
+    double v2r = 0.0;
+    double v2i = 0.0;
+    int lid;
+    if (outputVarGIDs_.size()>0)
+    {
+      if (outputVarGIDs_[0] > -1)
+      {
+        // v1r = bXf.getElementByGlobalIndex(outputVarGIDs_[0], 2*harmonicNumber_  );
+        // v1i = bXf.getElementByGlobalIndex(outputVarGIDs_[0], 2*harmonicNumber_+1);
+        v1r = bXf.block(outputVarGIDs_[0])[2*harmonicNumber_  ];
+        v1i = bXf.block(outputVarGIDs_[0])[2*harmonicNumber_+1];
+      }
+    }
+
+    if (outputVarGIDs_.size()>1)
+    {
+      if (outputVarGIDs_[0] > -1)
+      {
+        // v2r = bXf.getElementByGlobalIndex(outputVarGIDs_[1], 2*harmonicNumber_  );
+        // v2i = bXf.getElementByGlobalIndex(outputVarGIDs_[1], 2*harmonicNumber_+1);
+        v2r = bXf.block(outputVarGIDs_[1])[2*harmonicNumber_  ];
+        v2i = bXf.block(outputVarGIDs_[1])[2*harmonicNumber_+1];
+      }
+    }
+    outputValReal_ = v1r - v2r;
+    outputValImag_ = v1i - v2i;
+    outputValCosPhi_ = outputValReal_ / sqrt(outputValReal_*outputValReal_ + outputValImag_*outputValImag_);
+    outputValSinPhi_ = outputValImag_ / sqrt(outputValReal_*outputValReal_ + outputValImag_*outputValImag_);
+  }
 
   Teuchos::RCP<Linear::BlockVector> bXtPtr_ = hbBuilderPtr_->createTimeDomainBlockVector();
   bXtPtr_->putScalar(0.0);
@@ -1345,12 +2035,12 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
     if (DEBUG_HBNOISE)
     {
       // print conductance matrix
-      Xyce::dout() << "dFdxMatrixPtr block(" << i << "):" << std::endl;
+      Xyce::dout() << "dFdxMatrixPtr time point of " << i << ":" << std::endl;
       dFdxMatrixPtr->print( Xyce::dout() );
       Xyce::dout() << std::endl;
 
       // print capacitance matrix
-      Xyce::dout() << "dQdxMatrixPtr block(" << i << "):" << std::endl;
+      Xyce::dout() << "dQdxMatrixPtr time point of " << i << ":" << std::endl;
       dQdxMatrixPtr->print( Xyce::dout() );
       Xyce::dout() << std::endl;
     }
@@ -1358,15 +2048,37 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
 
   if (DEBUG_HBNOISE)
   {
-    Xyce::dout() << "Reporting Gt_ Matrices, each block is a time point" << std::endl;
+    Xyce::dout() << "Reporting Gt_ Matrices, each array element is a row of the matrix, each block is a time point" << std::endl;
     for (int i=0; i<BlockSize; i++){
       Xyce::dout() << "Gt_[" << i << "]: " << std::endl;
       Gt_[i]->print(Xyce::dout());
       Xyce::dout() << std::endl;
     }
+    Xyce::dout() << "Reporting Ct_ Matrices, each array element is a row of the matrix, each block is a time point" << std::endl;
+    for (int i=0; i<BlockSize; i++){
+      Xyce::dout() << "Ct_[" << i << "]: " << std::endl;
+      Ct_[i]->print(Xyce::dout());
+      Xyce::dout() << std::endl;
+    }
   }
 
   return true;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::setMatrixElement
+// Purpose       : Set a matrix element
+// Special Notes : This helper function should be moved to a more appropriate place
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/4/2025
+//-----------------------------------------------------------------------------
+void HBNOISE::setMatrixElement(Linear::Matrix& mat, int row, int col, double value) {
+    static std::vector<double> values{0.0};
+    static std::vector<int> indices{0};
+    values[0] = value;
+    indices[0] = col;
+    mat.putLocalRow(row, 1, values.data(), indices.data());
 }
 
 //-----------------------------------------------------------------------------
@@ -1502,6 +2214,81 @@ bool HBNOISE::getDCOPFlag() const
 }
 
 //-----------------------------------------------------------------------------
+// Function      : NOISE::updateDataParams_
+// Purpose       :
+// Special Notes : Used for AC analysis classes, when .DATA is used
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/31/2025
+// Originally written by Eric Keiter for the NOISE analysis class
+//-----------------------------------------------------------------------------
+bool HBNOISE::updateDataParams_ (int stepNumber)
+{
+  bool reset = updateSweepParams(stepNumber, hbnoiseSweepVector_.begin(), hbnoiseSweepVector_.end());
+
+  bool nonFreqPresent=false;
+  lastFreq_ = currentFreq_;
+  for (int iac=0;iac<hbnoiseSweepVector_.size();++iac)
+  {
+    std::string name = hbnoiseSweepVector_[iac].name; Util::toUpper(name);
+    double val = hbnoiseSweepVector_[iac].currentVal;
+    if (name == "FREQ" || name == "HERTZ")
+    {
+      currentFreq_ = val;
+
+      delFreq_ = currentFreq_ - lastFreq_;
+      lnFreq_     = std::log(std::max(currentFreq_,N_MINLOG));
+      lnLastFreq_ = std::log(std::max(lastFreq_,N_MINLOG));
+      delLnFreq_  = lnFreq_ - lnLastFreq_;
+    }
+    else
+    {
+      nonFreqPresent=true;
+      loader_.setParam(name, val, true);
+    }
+  }
+
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::updateCurrentFreq_
+// Purpose       :
+// Special Notes : Used for AC analysis classes, when .DATA is used
+// Scope         : private
+// Creator       : Meysam Bahmanian
+// Creation Date : 5/31/2025
+// Originally written by Eric Keiter for the NOISE analysis class
+//-----------------------------------------------------------------------------
+bool HBNOISE::updateCurrentFreq_(int stepNumber)
+{
+  lastFreq_ = currentFreq_;
+  if (type_ == "LIN")
+  {
+
+    currentFreq_  = fOffsetStart_ + static_cast<double>(stepNumber)*fstep_;
+  }
+  else if(type_ == "DEC" || type_ == "OCT")
+  {
+
+    currentFreq_ = fOffsetStart_*pow(stepMult_, static_cast<double>(stepNumber) );
+  }
+  else
+  {
+    Report::DevelFatal().in("HBNOISE::updateCurrentFreq_")
+      << "HBNOISE::updateCurrentFreq_: unsupported STEP type";
+  }
+
+  delFreq_ = currentFreq_ - lastFreq_;
+
+  lnFreq_     = std::log(std::max(currentFreq_,N_MINLOG));
+  lnLastFreq_ = std::log(std::max(lastFreq_,N_MINLOG));
+  delLnFreq_  = lnFreq_ - lnLastFreq_;
+
+  return true;
+}
+
+//-----------------------------------------------------------------------------
 // Function      : HBNOISE::setAnalysisParams
 // Purpose       : Sets the HBNOISE analysis parameters
 // Special Notes :
@@ -1630,21 +2417,6 @@ bool HBNOISE::setAnalysisParams(const Util::OptionBlock & paramsBlock)
   }
 
   return retval;
-}
-
-
-//-----------------------------------------------------------------------------
-// Function      : HBNOISE::setLinSol
-// Purpose       : Save linear solver options
-// Special Notes :
-// Scope         : public
-// Creator       : Meysam Bahmanian
-// Creation Date : 5/13/2025
-//-----------------------------------------------------------------------------
-bool HBNOISE::setLinSol(const Util::OptionBlock & OB)
-{
-  saved_lsOB_ = OB;
-  return true;
 }
 
 //-----------------------------------------------------------------------------

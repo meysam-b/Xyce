@@ -41,11 +41,12 @@
 #include <N_TOP_fwd.h>
 
 #include <N_ANP_AnalysisBase.h>
-#include <N_ANP_StepEvent.h>
 #include <N_ANP_RegisterAnalysis.h>
+#include <N_ANP_StepEvent.h>
 #include <N_UTL_DFTInterfaceDecl.hpp>
 #include <N_UTL_FFTInterface.hpp>
 #include <N_UTL_Listener.h>
+#include <N_UTL_Op.h>
 #include <N_UTL_OptionBlock.h>
 
 namespace Xyce {
@@ -93,8 +94,25 @@ protected:
 private:
   Analysis::HB* getHBAnalysis();
   int setupSweepParam_();
+  bool updateDataParams_(int stepNumber);
+  bool updateCurrentFreq_(int stepNumber);
+
+  // This helper function should be moved to a more appropriate place
+  void setMatrixElement(Linear::Matrix& mat, int row, int col, double value);
+
   bool updateLinearTimeVariantSystem_C_and_G_();
   bool createHarmonicSpaceLinearSystem_();
+  bool updateHarmonicSpaceMatrix_G_();
+  bool updateHarmonicSpaceMatrix_omegaC_0_();
+  bool updateHarmonicSpaceMatrix_omegaC_1_();
+  bool updateHarmonicSpaceMatrix_C_2_();
+  bool updateHarmonicSpaceFreq_(); // update the harmonic space matrix for the frequency
+  void resetAdjointHBNOISELinearSystem_(bool quadrature);
+
+  void setupAdjointRHS_();
+  bool solveAdjointHBNOISE_();
+
+  void processOutputNodes ();
 
   // Member variables similar to HB
   AnalysisManager &                     analysisManager_;
@@ -130,9 +148,12 @@ private:
   std::map< std::string, std::vector< std::vector<double> > > dataTablesMap_;  // Maps dataset name to parameter values
   Analysis::HB *hbAnalysis_;
 
-  // AC B-vectors
-  Linear::Vector * bVecRealPtr;
-  Linear::Vector * bVecImagPtr;
+  double                        delFreq_;
+  double                        lastFreq_;
+  double                        currentFreq_;
+  double                        lnFreq_;
+  double                        lnLastFreq_;
+  double                        delLnFreq_;
 
   // NOISE B-vectors
   Linear::Vector * bNoiseVecRealPtr;
@@ -147,13 +168,26 @@ private:
   std::vector<Teuchos::RCP<Linear::BlockVector> > Gf_;
 
   Linear::BlockMatrix *           harmonicSpaceMatrix_;
+  Linear::BlockMatrix *           harmonicSpaceMatrixConstant_;
   Linear::BlockMatrix *           harmonicSpaceMatrix_G_; //conductance matrix
   Linear::BlockMatrix *           harmonicSpaceMatrix_omegaC_0_; // PART 0: dC(t)/dt
   Linear::BlockMatrix *           harmonicSpaceMatrix_omegaC_1_; // PART 1: carrier derivative 
   Linear::BlockMatrix *           harmonicSpaceMatrix_C_2_;   // PART 2: baseband/in-phase/quadrature components derivative
+  Linear::BlockMatrix *           harmonicSpaceMatrix_omegamC_2_;   // PART 2: scaled by omegam
   Linear::BlockVector *           harmonicSpaceB_;
   Linear::BlockVector *           harmonicSpaceX_;
   Linear::BlockVector *           harmonicSpace_SavedX_;
+
+  Linear::Solver *              blockSolver_;
+  Linear::Problem *             blockProblem_;
+  Util::OptionBlock             linSolOptionBlock_;
+
+  std::vector<std::string> outputVarNames_;
+  std::vector<int>    outputVarGIDs_;
+  double outputValReal_;
+  double outputValImag_;
+  double outputValCosPhi_;
+  double outputValSinPhi_;
 
   double freq_;                                                 // primary frequency from HB analysis
   double omega_;                                                // primary angular frequency (2*pi*freq_) from HB analysis
