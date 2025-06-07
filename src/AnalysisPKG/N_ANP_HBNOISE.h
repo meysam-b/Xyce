@@ -107,12 +107,15 @@ private:
   bool updateHarmonicSpaceMatrix_omegaC_1_();
   bool updateHarmonicSpaceMatrix_C_2_();
   bool updateHarmonicSpaceFreq_(); // update the harmonic space matrix for the frequency
-  void resetAdjointHBNOISELinearSystem_(bool quadrature);
+  void resetAdjointHBNOISELinearSystem_();
 
   void setupAdjointRHS_();
   bool solveAdjointHBNOISE_();
+  void prepareHBNOISEOutputVectors_();
 
   void processOutputNodes ();
+  
+  void clearNoiseIntegrals_();
 
   // Member variables similar to HB
   AnalysisManager &                     analysisManager_;
@@ -155,6 +158,9 @@ private:
   double                        lnLastFreq_;
   double                        delLnFreq_;
 
+  double                        totalInPhaseNoiseDens_;
+  double                        totalQuadratureNoiseDens_;
+
   // NOISE B-vectors
   Linear::Vector * bNoiseVecRealPtr;
   Linear::Vector * bNoiseVecImagPtr;
@@ -174,12 +180,17 @@ private:
   Linear::BlockMatrix *           harmonicSpaceMatrix_omegaC_1_; // PART 1: carrier derivative 
   Linear::BlockMatrix *           harmonicSpaceMatrix_C_2_;   // PART 2: baseband/in-phase/quadrature components derivative
   Linear::BlockMatrix *           harmonicSpaceMatrix_omegamC_2_;   // PART 2: scaled by omegam
-  Linear::BlockVector *           harmonicSpaceB_;
-  Linear::BlockVector *           harmonicSpaceX_;
-  Linear::BlockVector *           harmonicSpace_SavedX_;
+  Linear::BlockVector *           harmonicSpaceBI_; // in-phase
+  Linear::BlockVector *           harmonicSpaceBQ_; // quadrature
+  Linear::BlockVector *           harmonicSpaceXI_; // in-phase
+  Linear::BlockVector *           harmonicSpaceXQ_; // quadrature
+  Linear::BlockVector *           harmonicSpace_SavedXI_; // in-phase
+  Linear::BlockVector *           harmonicSpace_SavedXQ_; // quadrature
 
-  Linear::Solver *              blockSolver_;
-  Linear::Problem *             blockProblem_;
+  Linear::Solver *              blockSolverI_;
+  Linear::Solver *              blockSolverQ_;
+  Linear::Problem *             blockProblemI_;
+  Linear::Problem *             blockProblemQ_;
   Util::OptionBlock             linSolOptionBlock_;
 
   std::vector<std::string> outputVarNames_;
@@ -203,7 +214,18 @@ private:
   Util::OptionBlock saved_lsOB_;
   Util::OptionBlock saved_timeIntOB_;
 
-  std::vector<Xyce::Analysis::NoiseData*> noiseDataVec_;
+  // noise contribution of each device summed over all noise harmonic frequencies for the in-phase output
+  std::vector<Xyce::Analysis::NoiseData*> noiseDataVecI_;
+
+  // noise contribution of each device summed over all noise harmonic frequencies for the quadrature output
+  std::vector<Xyce::Analysis::NoiseData*> noiseDataVecQ_;
+
+  // noise contribution of each device at each noise harmonic freuquency for the in-phase output
+  // The first element of this vector is our old AC NOISE!
+  std::vector< std::vector<Xyce::Analysis::NoiseData*> > noiseDataVecVecI_;
+
+  // noise contribution of each device at each noise harmonic freuquency for the quadrature output
+  std::vector< std::vector<Xyce::Analysis::NoiseData*> > noiseDataVecVecQ_;
 };
 
 bool registerHBNOISEFactory(FactoryBlock &factory_block);
