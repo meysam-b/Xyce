@@ -165,6 +165,12 @@ struct OpData
     onoise_(0.0),
     inoise_(0.0),
     noiseDataVec_(0),
+    amnoise_(0.0),
+    pmnoise_(0.0),
+    amnoiseDataVec_(0),
+    pmnoiseDataVec_(0),
+    amnoiseDataVecVec_(0),
+    pmnoiseDataVecVec_(0),
     RFparams_(0)
   {}
 
@@ -192,6 +198,12 @@ struct OpData
     onoise_(op_data.onoise_),
     inoise_(op_data.inoise_),
     noiseDataVec_(op_data.noiseDataVec_),
+    amnoise_(op_data.amnoise_),
+    pmnoise_(op_data.pmnoise_),
+    amnoiseDataVec_(op_data.amnoiseDataVec_),
+    pmnoiseDataVec_(op_data.pmnoiseDataVec_),
+    amnoiseDataVecVec_(op_data.amnoiseDataVecVec_),
+    pmnoiseDataVecVec_(op_data.pmnoiseDataVecVec_),
     RFparams_(op_data.RFparams_)
   {}
 
@@ -215,6 +227,12 @@ struct OpData
     onoise_ = op_data.onoise_;
     inoise_ = op_data.inoise_;
     noiseDataVec_ = op_data.noiseDataVec_;
+    amnoise_ = op_data.amnoise_;
+    pmnoise_ = op_data.pmnoise_;
+    amnoiseDataVec_ = op_data.amnoiseDataVec_;
+    pmnoiseDataVec_ = op_data.pmnoiseDataVec_;
+    amnoiseDataVecVec_ = op_data.amnoiseDataVecVec_;
+    pmnoiseDataVecVec_ = op_data.pmnoiseDataVecVec_;
     RFparams_ = op_data.RFparams_;
 
     return *this;
@@ -239,6 +257,16 @@ struct OpData
     double                              onoise = 0.0,
     double                              inoise = 0.0,
     const std::vector<Xyce::Analysis::NoiseData*> * noiseDataVec = 0,
+    // Meysam Bahmanian
+    // 6/10/2025
+    // enabling these lines require changing all of the existing instantiations of OpData using this constructor.
+    // current quick workaround is to set amnoise_ and pmnoise_ to 0.0 in the constructor.
+    // double                              amnoise = 0.0,
+    // double                              pmnoise = 0.0,
+    // const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVec = 0,
+    // const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec = 0,
+    // const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVecVec = 0,
+    // const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVecVec = 0,
     const RFparamsData * RFparams = 0
     )
   : currentIndex_(current_index),
@@ -259,6 +287,12 @@ struct OpData
     onoise_(onoise),
     inoise_(inoise),
     noiseDataVec_(noiseDataVec),
+    // amnoise_(amnoise),
+    // pmnoise_(pmnoise),
+    // amnoiseDataVec_(amnoiseDataVec),
+    // pmnoiseDataVec_(pmnoiseDataVec),
+    // amnoiseDataVecVec_(amnoiseDataVecVec),
+    // pmnoiseDataVecVec_(pmnoiseDataVecVec),
     RFparams_(RFparams)
   {}
 
@@ -282,6 +316,12 @@ struct OpData
   double                  onoise_;
   double                  inoise_;
   const std::vector<Xyce::Analysis::NoiseData*> * noiseDataVec_;
+  double                  amnoise_;
+  double                  pmnoise_;
+  const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVec_;
+  const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec_;
+  const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVecVec_;
+  const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVecVec_;
 
   const RFparamsData * RFparams_;
 };

@@ -142,6 +142,34 @@ complex OutputMgrInputNoiseOp::get(const OutputMgrInputNoiseOp &op,
 }
 
 //-----------------------------------------------------------------------------
+// Function      : OutputMgrAMNoiseOp::get
+// Purpose       : get value for AM noise spectral density
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/10/2025
+//-----------------------------------------------------------------------------
+complex OutputMgrAMNoiseOp::get(const OutputMgrAMNoiseOp &op, 
+    const Util::Op::OpData &op_data)
+{
+  return op_data.amnoise_;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : OutputMgrPMNoiseOp::get
+// Purpose       : get value for PM noise spectral density
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/10/2025
+//-----------------------------------------------------------------------------
+complex OutputMgrPMNoiseOp::get(const OutputMgrPMNoiseOp &op, 
+    const Util::Op::OpData &op_data)
+{
+  return op_data.pmnoise_;
+}
+
+//-----------------------------------------------------------------------------
 // Function      : OutputMgrOutputNoiseContOp::get
 // Purpose       : Get either the total noise output contribution for a device,
 //               : or the noise output contribution from a specified noise-type 

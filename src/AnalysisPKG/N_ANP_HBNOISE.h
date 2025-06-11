@@ -61,8 +61,8 @@ public:
     Nonlinear::Manager &                  nonlinear_manager,
     Loader::Loader &                      loader,
     Device::DeviceMgr &                   device_manager,
-    Topo::Topology &                      topology,
-    IO::InitialConditionsManager &        initial_conditions_manager);
+    Topo::Topology &                      topology
+    );
 
   virtual ~HBNOISE();
 
@@ -111,20 +111,25 @@ private:
 
   void setupAdjointRHS_();
   bool solveAdjointHBNOISE_();
-  void prepareHBNOISEOutputVectors_();
+  void prepareHBNOISEOutputVectors_(
+    Linear::BlockVector *           harmonicSpaceX,
+    std::vector<std::vector<Xyce::Analysis::NoiseData*> > &noiseDataVecVec,
+    std::vector<Xyce::Analysis::NoiseData*> &noiseDataVec,
+    double &totalNoiseDens);
 
   void processOutputNodes ();
   
   void clearNoiseIntegrals_();
+  inline void evalDeviceNoiseDensities(Xyce::Analysis::NoiseData& noiseData, Linear::Vector& XIreal, Linear::Vector& XIimag);
 
-  // Member variables similar to HB
+private:
   AnalysisManager &                     analysisManager_;
   Loader::Loader &                      loader_;
   Linear::System &                      linearSystem_;
   Nonlinear::Manager &                  nonlinearManager_;
   Device::DeviceMgr &                   deviceManager_;
   Topo::Topology &                      topology_;
-  IO::InitialConditionsManager &        initialConditionsManager_;
+  OutputMgrAdapter &                    outputManagerAdapter_;
   Parallel::Manager *                   pdsMgrPtr_;
   AnalysisBase *                        currentAnalysisObject_;
   Loader::HBLoader *                    hbLoaderPtr_; /// HB loader, builder, system, and DFT
@@ -158,12 +163,13 @@ private:
   double                        lnLastFreq_;
   double                        delLnFreq_;
 
-  double                        totalInPhaseNoiseDens_;
-  double                        totalQuadratureNoiseDens_;
+  double                        totalAMNoiseDens_;
+  double                        totalPMNoiseDens_;
 
   // NOISE B-vectors
-  Linear::Vector * bNoiseVecRealPtr;
-  Linear::Vector * bNoiseVecImagPtr;
+  Linear::Vector * bNoiseVecPtr;
+  // Linear::Vector * bNoiseVecRealPtr;
+  // Linear::Vector * bNoiseVecImagPtr;
 
   //time domain matrices
   std::vector<Teuchos::RCP<Linear::BlockVector> > Ct_;
@@ -197,11 +203,13 @@ private:
   std::vector<int>    outputVarGIDs_;
   double outputValReal_;
   double outputValImag_;
+  double outputValSqr_;
   double outputValCosPhi_;
   double outputValSinPhi_;
 
   double freq_;                                                 // primary frequency from HB analysis
   double omega_;                                                // primary angular frequency (2*pi*freq_) from HB analysis
+  int                   numHarms_;                              // number of harmonics
   int                   size_;                                  // Problem Size: 2*harmonics+1
   double                period_;                                // Periodicity Information
   std::vector<double>                   times_;
@@ -221,10 +229,15 @@ private:
   std::vector<Xyce::Analysis::NoiseData*> noiseDataVecQ_;
 
   // noise contribution of each device at each noise harmonic freuquency for the in-phase output
+  // The element are the contributions from baseband
+  // The other components are pairs of LSB and USB components around the carrier frequency
+  // total number of elements is 2*numHarms+1
   // The first element of this vector is our old AC NOISE!
   std::vector< std::vector<Xyce::Analysis::NoiseData*> > noiseDataVecVecI_;
 
   // noise contribution of each device at each noise harmonic freuquency for the quadrature output
+  // same as noiseDataVecVecI_ but for the quadrature output
+  // when the desired output is baseband, there will be no quadrature noise.
   std::vector< std::vector<Xyce::Analysis::NoiseData*> > noiseDataVecVecQ_;
 };
 

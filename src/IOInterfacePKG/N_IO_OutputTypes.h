@@ -40,7 +40,7 @@ namespace Xyce {
 namespace IO {
 
 namespace OutputType {
-  enum OutputType {DC, TRAN, AC, AC_IC, HB_FD, HB_TD, HB_IC, HB_STARTUP, DCOP, HOMOTOPY, MPDE, MPDE_IC, MPDE_STARTUP, SENS, TRANADJOINT, NOISE, SPARAM, ES, PCE};
+  enum OutputType {DC, TRAN, AC, AC_IC, HB_FD, HB_TD, HB_IC, HB_STARTUP, DCOP, HOMOTOPY, MPDE, MPDE_IC, MPDE_STARTUP, SENS, TRANADJOINT, NOISE, HBNOISE, SPARAM, ES, PCE};
 }
 
 typedef std::map<OutputType::OutputType, std::vector<PrintParameters> > OutputParameterMap;

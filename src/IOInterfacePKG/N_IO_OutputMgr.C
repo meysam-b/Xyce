@@ -60,6 +60,7 @@
 #include <N_IO_OutputterAC.h>
 #include <N_IO_OutputterSParam.h>
 #include <N_IO_OutputterNoise.h>
+#include <N_IO_OutputterHBNoise.h>
 #include <N_IO_OutputterEmbeddedSampling.h>
 #include <N_IO_OutputterPCE.h>
 #include <N_IO_OutputterHB.h>
@@ -670,6 +671,11 @@ void OutputMgr::earlyPrepareOutput(
           Outputter::enableNoiseOutput(comm, *this, analysis_mode);
         break;
 
+      case Analysis::ANP_MODE_HBNOISE:
+        if (!testAndSet(enabledAnalysisSet_, Analysis::ANP_MODE_HBNOISE))
+          Outputter::enableHBNoiseOutput(comm, *this, analysis_mode);
+        break;
+
       default:
         // no op, since not all analysis types use the OutputMgr for output
         break;
@@ -842,6 +848,10 @@ void OutputMgr::prepareOutput(
 
       case Analysis::ANP_MODE_NOISE:
         addActiveOutputter(PrintType::NOISE, analysis_mode);
+        break;
+
+      case Analysis::ANP_MODE_HBNOISE:
+        addActiveOutputter(PrintType::HBNOISE, analysis_mode);
         break;
 
       default:
@@ -1477,6 +1487,8 @@ bool OutputMgr::parsePRINTBlock(const Util::OptionBlock & print_block)
         print_type = PrintType::TRAN;
       else if (s == "NOISE")
         print_type = PrintType::NOISE;
+      else if (s == "HBNOISE")
+        print_type = PrintType::HBNOISE;
       else if (s == "ROL")
         print_type = PrintType::DC; // TT
       else
@@ -1835,6 +1847,62 @@ bool OutputMgr::parsePRINTBlock(const Util::OptionBlock & print_block)
     std::copy(noiseVariableList_.begin(), noiseVariableList_.end(), std::back_inserter(noise_print_parameters.variableList_));
 
     addOutputPrintParameters(OutputType::NOISE, noise_print_parameters);
+
+  }
+  else if (print_type == PrintType::HBNOISE)
+  {
+    PrintParameters hbnoise_print_parameters = print_parameters;
+    hbnoise_print_parameters.expandComplexTypes_ = hbnoise_print_parameters.format_ != Format::PROBE
+                                                && hbnoise_print_parameters.format_ != Format::RAW
+                                                && hbnoise_print_parameters.format_ != Format::RAW_ASCII;
+
+    if (hbnoise_print_parameters.format_ == Format::STD)
+    {
+      hbnoise_print_parameters.defaultExtension_ = ".HBNOISE.prn";
+    }
+    else if (hbnoise_print_parameters.format_ == Format::CSV)
+    {
+      hbnoise_print_parameters.defaultExtension_ = ".HBNOISE.csv";
+    }
+    else if (hbnoise_print_parameters.format_ == Format::TECPLOT)
+    {
+      hbnoise_print_parameters.defaultExtension_ = ".HBNOISE.dat";
+    }
+    //else if (noise_print_parameters.format_ == Format::PROBE)
+    //{
+    //  noise_print_parameters.defaultExtension_ = ".NOISE.csd";
+    //}
+    //  else if (noise_print_parameters.format_ == Format::DAKOTA)
+    //{
+    //  noise_print_parameters.defaultExtension_ = ".NOISE.txt";
+    //}
+    else if ( (hbnoise_print_parameters.format_ == Format::RAW) ||
+              (hbnoise_print_parameters.format_ == Format::RAW_ASCII) ||
+              (hbnoise_print_parameters.format_ == Format::PROBE) ||
+              (hbnoise_print_parameters.format_ == Format::TS1) ||
+              (hbnoise_print_parameters.format_ == Format::TS2) )
+    {
+      hbnoise_print_parameters.defaultExtension_ = ".HBNOISE.prn";
+      // print out the Index column, since this will be in STD format
+      hbnoise_print_parameters.printIndexColumn_ = true;
+      if (printStepNumCol_)
+        hbnoise_print_parameters.printStepNumColumn_ = true;
+    }
+    else
+    {
+      hbnoise_print_parameters.defaultExtension_ = ".HBNOISE.unknown";
+    }
+
+    // adjust which columns appear in the output file, depending on the print format
+    hbnoise_print_parameters.variableList_.push_front(Util::Param("FREQ", 0.0));
+    if (hbnoise_print_parameters.printIndexColumn_)
+      hbnoise_print_parameters.variableList_.push_front(Util::Param("INDEX", 0.0));
+    if (hbnoise_print_parameters.printStepNumColumn_)
+      hbnoise_print_parameters.variableList_.push_front(Util::Param("STEPNUM", 0.0));
+
+    std::copy(noiseVariableList_.begin(), noiseVariableList_.end(), std::back_inserter(hbnoise_print_parameters.variableList_));
+
+    addOutputPrintParameters(OutputType::HBNOISE, hbnoise_print_parameters);
 
   }
   else if (print_type == PrintType::HOMOTOPY)
@@ -2916,6 +2984,34 @@ bool OutputMgr::registerNoise (const Util::OptionBlock &option_block)
 }
 
 //-----------------------------------------------------------------------------
+// Function      : OutputMgr::registerHBNOISE
+// Purpose       : registers set of variables to set for .HBNOISE.
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian, Heinz Nixdorf Institute
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+bool OutputMgr::registerHBNOISE (const Util::OptionBlock &option_block)
+{
+  bool bsuccess = true;
+
+  std::vector<std::string> parameters;
+  for (Util::ParamList::const_iterator it = option_block.begin(), 
+      end = option_block.end(); it != end; ++it)
+  { 
+    // if pts_per_summary is set, then we need to output a lot more stuff.
+    // NOTE.  pts_per_summary is a spice3-ism, and probably not that useful here.
+    if ((*it).uTag() == "PTS_PER_SUMMARY")
+    {
+      pts_per_summary_ = (*it).getImmutableValue<int>();
+      pts_per_summary_Given = true;
+    }
+  }
+
+  return bsuccess;
+}
+
+//-----------------------------------------------------------------------------
 // Function      : makeParamList
 // Purpose       : 
 // Special Notes : 
@@ -3754,6 +3850,39 @@ void OutputMgr::outputNoise(
 }
 
 //-----------------------------------------------------------------------------
+// Function      : OutputMgr::outputHBNoise
+// Purpose       : .PRINT output for HB noise runs
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+void OutputMgr::outputHBNoise(
+    Parallel::Machine     comm,
+    double                frequency,
+    const Linear::Vector & real_solution_vector, 
+    const Linear::Vector & imaginary_solution_vector,
+    double                totalAMNoiseDens, 
+    double                totalPMNoiseDens, 
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ)
+{
+  outputState_.circuitFrequency_ = frequency;
+
+  if (!activeOutputterStack_.empty())
+  {
+    std::vector<Outputter::Interface *>::const_iterator it = 
+      activeOutputterStack_.back().begin();
+
+    for ( ; it != activeOutputterStack_.back().end(); ++it)
+    {
+      (*it)->outputHBNoise(comm, frequency, real_solution_vector, imaginary_solution_vector,
+               totalAMNoiseDens, totalPMNoiseDens, noiseDataVecI, noiseDataVecQ);
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------
 // Function      : OutputMgr::outputEmbeddedSampling
 // Purpose       : .PRINT ES for embedded sampling runs
 // Special Notes :
@@ -4513,6 +4642,11 @@ bool registerPkgOptionsMgr(OutputMgr & output_manager, PkgOptionsMgr &options_ma
   // AnalysisPKG/N_ANP_NOISE.C file.
   options_manager.addCommandProcessor("NOISE", 
       IO::createRegistrationOptions(output_manager, &OutputMgr::registerNoise));
+  
+  // The command parser for ".HBNOISE" is "extractHBNOISEData" in the
+  // AnalysisPKG/N_ANP_HBNOISE.C file.
+  options_manager.addCommandProcessor("HBNOISE", 
+      IO::createRegistrationOptions(output_manager, &OutputMgr::registerHBNOISE));
 
   // These are registrations of options processors for options blocks
   // of the form ".OPTIONS <pkg>".  These are all processed by a single

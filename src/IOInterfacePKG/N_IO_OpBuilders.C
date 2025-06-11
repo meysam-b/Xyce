@@ -431,6 +431,102 @@ struct CircuitNoiseContOpBuilder : public Util::Op::Builder
 };
 
 //--------------------------------------------------------------------------
+// Structure     : Util::Op::Builder::CircuitAMNoiseOpBuilder
+// Purpose       : This creates an OutputMgrAMNoiseOp
+// Special Notes : used for HBNOISE, AM noise data
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/9/2025
+//--------------------------------------------------------------------------
+struct CircuitAMNoiseOpBuilder : public Util::Op::Builder
+{
+  CircuitAMNoiseOpBuilder(const OutputMgr & output_manager,
+      const Analysis::AnalysisManager & analysis_manager)
+    : outputManager_(output_manager),
+    analysisManager_(analysis_manager)
+
+  {}
+
+  virtual ~CircuitAMNoiseOpBuilder()
+  {}
+
+  virtual void registerCreateFunctions(Util::Op::BuilderManager &builder_manager) const
+  {
+    builder_manager.addCreateFunction<OutputMgrAMNoiseOp>();
+  }
+
+  virtual Util::Op::Operator *makeOp(Util::ParamList::const_iterator &it) const
+  {
+    Util::Op::Operator *new_op = 0;
+    const std::string &param_tag = (*it).tag();
+
+    if (param_tag == "AMNOISE")
+    {
+      if (!analysisManager_.getHBNOISEFlag())
+      {
+        Report::UserError0() << "AMNOISE operator only supported for .HBNOISE analyses";
+        return new_op;
+      }
+
+      new_op  = new OutputMgrAMNoiseOp(param_tag, outputManager_);
+    }
+
+    return new_op;
+  }
+
+  private:
+  const OutputMgr &     outputManager_;
+  const Analysis::AnalysisManager &    analysisManager_;
+};
+
+//--------------------------------------------------------------------------
+// Structure     : Util::Op::Builder::CircuitPMNoiseOpBuilder
+// Purpose       : This creates an OutputMgrPMNoiseOp
+// Special Notes : used for HBNOISE, PM noise data
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/9/2025
+//--------------------------------------------------------------------------
+struct CircuitPMNoiseOpBuilder : public Util::Op::Builder
+{
+  CircuitPMNoiseOpBuilder(const OutputMgr & output_manager,
+      const Analysis::AnalysisManager & analysis_manager)
+    : outputManager_(output_manager),
+    analysisManager_(analysis_manager)
+
+  {}
+
+  virtual ~CircuitPMNoiseOpBuilder()
+  {}
+
+  virtual void registerCreateFunctions(Util::Op::BuilderManager &builder_manager) const
+  {
+    builder_manager.addCreateFunction<OutputMgrPMNoiseOp>();
+  }
+
+  virtual Util::Op::Operator *makeOp(Util::ParamList::const_iterator &it) const
+  {
+    Util::Op::Operator *new_op = 0;
+    const std::string &param_tag = (*it).tag();
+
+    if (param_tag == "PMNOISE")
+    {
+      if (!analysisManager_.getHBNOISEFlag())
+      { 
+        Report::UserError0() << "PMNOISE operator only supported for .HBNOISE analyses";
+        return new_op;
+      }
+
+      new_op  = new OutputMgrPMNoiseOp(param_tag, outputManager_);
+    }
+
+    return new_op;
+  }
+
+  private:
+  const OutputMgr &     outputManager_;
+  const Analysis::AnalysisManager &    analysisManager_;
+};
+
+//--------------------------------------------------------------------------
 // Structure     : Util::Op::Builder::CircuitFrequencyOpBuilder
 // Purpose       : This creates an OutputMgrFrequencyOp
 // Special Notes : FREQ and HERTZ are synonyms in Xyce
@@ -1806,6 +1902,11 @@ void registerOpBuilders(
   op_builder_manager.addBuilder(new CircuitNoiseContOpBuilder(output_manager,analysis_manager));
   op_builder_manager.addBuilder(new CircuitOutputNoiseOpBuilder(output_manager,analysis_manager));
   op_builder_manager.addBuilder(new CircuitInputNoiseOpBuilder(output_manager,analysis_manager));
+
+  // added by Meysam Bahmanian to support HBNOISE operators
+  op_builder_manager.addBuilder(new CircuitAMNoiseOpBuilder(output_manager,analysis_manager));
+  op_builder_manager.addBuilder(new CircuitPMNoiseOpBuilder(output_manager,analysis_manager));
+
   op_builder_manager.addBuilder(new CircuitFrequencyOpBuilder(output_manager));
   op_builder_manager.addBuilder(new CircuitIndexOpBuilder());
   op_builder_manager.addBuilder(new SensitivityOpBuilder());

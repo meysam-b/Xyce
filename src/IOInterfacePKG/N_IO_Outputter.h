@@ -382,6 +382,16 @@ public:
     double              totalInputNoiseDens_, 
     const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVec_);
 
+  virtual void outputHBNoise(
+    Parallel::Machine   comm,
+    double              frequency,
+    const Linear::Vector &        real_solution_vector,
+    const Linear::Vector &        imaginary_solution_vector,
+    double              totalInPhaseNoiseDens, 
+    double              totalQuadratureNoiseDens, 
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ);
+
   virtual void outputEmbeddedSampling(
     Parallel::Machine comm,
     bool regressionPCEenable,
@@ -496,6 +506,16 @@ private:
     double              totalOutputNoiseDens_, 
     double              totalInputNoiseDens_, 
     const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVec_) {}
+
+  virtual void doOutputHBNoise(
+    Parallel::Machine   comm,
+    double              frequency,
+    const Linear::Vector &        real_solution_vector,
+    const Linear::Vector &        imaginary_solution_vector,
+    double              totalAMNoiseDens, 
+    double              totalPMNoiseDens, 
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ) {}
 
   virtual void doOutputEmbeddedSampling(
     Parallel::Machine   comm,

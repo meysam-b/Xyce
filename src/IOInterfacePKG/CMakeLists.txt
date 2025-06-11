@@ -44,6 +44,7 @@ target_sources(XyceLib PRIVATE
       N_IO_OutputterHBTimeTecplot.C
       N_IO_OutputterHBFreqTecplot.C
       N_IO_OutputterHBICTecplot.C
+      N_IO_OutputterHBNoisePrn.C
       N_IO_OutputterHomotopy.C
       N_IO_OutputterHomotopyCSV.C
       N_IO_OutputterHomotopyPrn.C
@@ -80,6 +81,7 @@ target_sources(XyceLib PRIVATE
       N_IO_OutputterAC.C
       N_IO_OutputterDC.C
       N_IO_OutputterHB.C
+      N_IO_OutputterHBNoise.C
       N_IO_OutputterMPDE.C
       N_IO_OutputterRawOverride.C
       N_IO_OutputterNoise.C

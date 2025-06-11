@@ -201,6 +201,8 @@ public:
 
   bool getNoiseFlag() const;
 
+  bool getHBNOISEFlag() const;
+
   bool getDCSweepFlag() const;
 
   bool getDotOpSpecified()

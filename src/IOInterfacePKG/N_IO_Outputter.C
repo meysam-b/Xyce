@@ -189,6 +189,30 @@ void Interface::outputNoise(
 }
 
 //-----------------------------------------------------------------------------
+// Function      : Interface::outputHBNoise
+// Purpose       : 
+// Special Notes :
+// Scope         :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+void Interface::outputHBNoise(
+  Parallel::Machine             comm,
+  double                        frequency,
+  const Linear::Vector &        real_solution_vector,
+  const Linear::Vector &        imaginary_solution_vector,
+  double              totalAMNoiseDens, 
+  double              totalPMNoiseDens, 
+  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
+  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ)
+{
+  if (debug) Xyce::dout() << demangle(typeid(*this).name()) << " doOutputHBNoise" << std::endl;
+
+  doOutputHBNoise (comm, frequency, real_solution_vector, imaginary_solution_vector,
+        totalAMNoiseDens, totalPMNoiseDens, noiseDataVecI, noiseDataVecQ);
+}
+
+//-----------------------------------------------------------------------------
 // Function      : Interface::outputEmbeddedSampling
 // Purpose       :
 // Special Notes :

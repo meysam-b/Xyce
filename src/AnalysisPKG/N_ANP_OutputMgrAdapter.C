@@ -522,6 +522,32 @@ void OutputMgrAdapter::outputNoise (
 }
 
 //-----------------------------------------------------------------------------
+// Function      : OutputMgrAdapter::outputHBNoise
+// Purpose       : HBNOISE output
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian, Heinz Nixdorf Institute
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+void OutputMgrAdapter::outputHBNoise (
+  double                fOffset,
+  const double fOffsetStart,
+  const double fOffsetStop,
+  const Linear::Vector &  solnVecRealPtr,
+  const Linear::Vector &  solnVecImaginaryPtr,
+  double totalAMNoiseDens_, 
+  double totalPMNoiseDens_, 
+  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI_,
+  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ_)
+{
+  // measureManager_.updateNoiseMeasures(comm_, frequency, fStart, fStop, &solnVecRealPtr, &solnVecImaginaryPtr,
+  //     totalOutputNoiseDens_, totalInputNoiseDens_, &noiseDataVec_);
+
+  outputManager_.outputHBNoise(comm_, fOffset, solnVecRealPtr, solnVecImaginaryPtr, 
+      totalAMNoiseDens_, totalPMNoiseDens_, noiseDataVecI_, noiseDataVecQ_);
+}
+
+//-----------------------------------------------------------------------------
 // Function      : OutputMgrAdapter::outputEmbeddedSampling
 // Purpose       : constructor for Embedded Sampling output
 // Special Notes :

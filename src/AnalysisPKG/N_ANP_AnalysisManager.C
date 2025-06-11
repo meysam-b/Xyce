@@ -1238,6 +1238,22 @@ bool AnalysisManager::getNoiseFlag() const
 }
 
 //-----------------------------------------------------------------------------
+// Function      : AnalysisManager::getHBNoiseFlag
+// Purpose       : Gets a flag indicating we are in a HBNOISE calculation
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian, Heinz Nixdorf Institute
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+bool AnalysisManager::getHBNOISEFlag() const
+{
+  if (primaryAnalysisObject_ != 0)
+    return(analysisMode_ == ANP_MODE_HBNOISE || primaryAnalysisObject_->isAnalysis(ANP_MODE_HBNOISE));
+  else
+    return(analysisMode_ == ANP_MODE_HBNOISE);
+}
+
+//-----------------------------------------------------------------------------
 // Function      : AnalysisManager::getDCSweepFlag
 // Purpose       :
 // Special Notes :

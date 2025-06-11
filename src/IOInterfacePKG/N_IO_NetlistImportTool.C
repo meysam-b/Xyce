@@ -862,7 +862,7 @@ void printLineDiagnostics(
           bool done = false;
           if (name == "TEMP" || name == "TEMPER" || name == "TIME" || name == "FREQ" || name == "HERTZ" || name == "INDEX" ||
               name == "STEPNUM" || name == "OBJFUNC" || name == "OBJVARS" || name == "SENS" || name == "NOISE" || name == "sweep" ||
-              name == "ONOISE" || name == "INOISE")
+              name == "ONOISE" || name == "INOISE" || name == "AMNOISE" || name == "PMNOISE")
           {
             done = true;
           }

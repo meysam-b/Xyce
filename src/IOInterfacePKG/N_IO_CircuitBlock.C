@@ -2233,7 +2233,7 @@ bool CircuitBlock::handleAnalysis()
 {
   bool retval = true;
 
-  static const char *analysisOptions_[] = {"DC", "TRAN", "TR", "MPDE", "HB", "AC", "OP", "NOISE", "ROL"}; // TT
+  static const char *analysisOptions_[] = {"DC", "TRAN", "TR", "MPDE", "HB", "HBNOISE", "AC", "OP", "NOISE", "ROL"}; // TT
 
   // find first analysis type in option table
   std::list<Util::OptionBlock>::const_iterator op_analysis_it
@@ -2359,6 +2359,8 @@ bool CircuitBlock::handleAnalysis()
          (aVal == "AC" && usVal == "SENS") ||
          (aVal == "AC" && usVal == "SPARAM") ||
          (aVal == "NOISE" && usVal == "NOISE") ||
+         (aVal == "HBNOISE" && usVal == "HBNOISE") ||  // Meysam: This has to be corrected. 
+         (aVal == "HB" && usVal == "HBNOISE") ||       // HB is not consistent with HBNOISE print type. The problem is that there is always a primary analysis, but HBNOISE uses 2 analysis types.
          (aVal == "MOR" && usVal == "MOR")  ||
          (aVal == "ROL" && usVal == "DC"))) // TT
     {

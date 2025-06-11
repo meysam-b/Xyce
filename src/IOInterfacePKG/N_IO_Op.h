@@ -220,6 +220,52 @@ public:
 };
 
 //-----------------------------------------------------------------------------
+// Class         : OutputMgrAMNoiseOp
+// Purpose       : Operator for AM noise
+// Special Notes :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+class OutputMgrAMNoiseOp : public Util::Op::Op<OutputMgrAMNoiseOp, Util::Op::ReduceNone, Util::Op::EvalNoop>
+{
+public:
+  OutputMgrAMNoiseOp(const std::string &name, const OutputMgr &output_manager)
+    : Base(name),
+      outputMgr_(output_manager)
+  {}
+
+  virtual ~OutputMgrAMNoiseOp()
+  {}
+
+  static complex get(const OutputMgrAMNoiseOp &op, const Util::Op::OpData &op_data);
+
+  const OutputMgr &   outputMgr_;
+};
+
+//-----------------------------------------------------------------------------
+// Class         : OutputMgrPMNoiseOp
+// Purpose       : Operator for PM noise
+// Special Notes :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+class OutputMgrPMNoiseOp : public Util::Op::Op<OutputMgrPMNoiseOp, Util::Op::ReduceNone, Util::Op::EvalNoop>
+{
+public:
+  OutputMgrPMNoiseOp(const std::string &name, const OutputMgr &output_manager)
+    : Base(name),
+      outputMgr_(output_manager)
+  {}
+
+  virtual ~OutputMgrPMNoiseOp()
+  {}
+
+  static complex get(const OutputMgrPMNoiseOp &op, const Util::Op::OpData &op_data);
+
+  const OutputMgr &   outputMgr_;
+};
+
+//-----------------------------------------------------------------------------
 // Class         : OutputMgrOutputNoiseContOp
 // Purpose       : Operator for individual output noise contributions from
 //               : specific devices

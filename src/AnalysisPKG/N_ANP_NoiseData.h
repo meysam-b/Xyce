@@ -48,7 +48,7 @@ namespace Analysis {
 
 //-----------------------------------------------------------------------------
 // Class         : NoiseData
-// Purpose       : 
+// Purpose       : Saves noise data for a given device at a given frequency.
 // Special Notes : 
 // Creator       : Eric Keiter
 // Creation Date : 12/21/2014
@@ -77,6 +77,9 @@ public:
     totalNoise(0.0),
     totalOutputNoise(0.0),
     totalInputNoise(0.0),
+    relativeNoiseDens(0),
+    relativeNoiseDensTotal(0),
+    gainSqr(0),
     numSources(0), 
     T0(0.0),
     T2(0.0),
@@ -116,6 +119,16 @@ public:
   double totalOutputNoise;
   double totalInputNoise;
 
+  // Meysam Bahmanian
+  // 6/10/2025
+  // These variables are used to store the AM and PM noise densities for the device.
+  // "relative" means relative to the carrier. This can be used for both AM and PM noise densities.
+  std::vector<double> relativeNoiseDens;
+  double relativeNoiseDensTotal;
+  // I will also store the transfer function magnitudes for the device.
+  // This will be especially useful for regression testing.
+  std::vector<double> gainSqr;
+
   int numSources;
 
   double T0;
@@ -142,6 +155,16 @@ inline void NoiseData::resize(int size)
   li_Neg.clear();
   li_PosCorl.clear();
   li_NegCorl.clear();
+
+  // Meysam Bahmanian
+  // 6/10/2025
+  // HBNOISE variables
+  relativeNoiseDens.clear();
+  gainSqr.clear();
+
+  relativeNoiseDens.resize(size,0.0);
+  gainSqr.resize(size,0.0);
+  // end of HBNOISE variables
 
   noiseNames.resize(size);
 
@@ -176,6 +199,14 @@ inline NoiseData::~NoiseData()
   noiseDens.clear();
   lnNoiseDens.clear();
   lastLnNoiseDens.clear();
+
+  // Meysam Bahmanian
+  // 6/10/2025
+  // HBNOISE variables
+  relativeNoiseDens.clear();
+  gainSqr.clear();
+  // end of HBNOISE variables
+
   li_Pos.clear();
   li_Neg.clear();
   li_PosCorl.clear();

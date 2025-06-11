@@ -151,6 +151,11 @@ public:
     outputManager_.setDotNoiseSpecified(value);
   }
 
+  void setDotHBNOISESpecified( bool value)
+  {
+    outputManager_.setDotHBNOISESpecified(value);
+  }
+
   // transient-assisted HB analysis was requested
   void setTaHBSpecified( bool value)
   {
@@ -309,6 +314,17 @@ public:
       double totalOutputNoiseDens_, 
       double totalInputNoiseDens_, 
       const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVec_);
+
+  void outputHBNoise(
+      double                fOffset,
+      const double fOffsetStart,
+      const double fOffsetStop,
+      const Linear::Vector & solnVecRealPtr,
+      const Linear::Vector & solnVecImaginaryPtr,
+      double totalAMNoiseDens_, 
+      double totalPMNoiseDens_, 
+      const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI_,
+      const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ_);
 
   void outputEmbeddedSampling(
       bool regressionPCEenable,

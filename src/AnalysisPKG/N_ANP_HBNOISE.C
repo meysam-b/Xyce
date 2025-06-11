@@ -185,8 +185,7 @@ HBNOISE::HBNOISE(
   Nonlinear::Manager &                  nonlinear_manager,
   Loader::Loader &                      loader,
   Device::DeviceMgr &                   device_manager,
-  Topo::Topology &                      topology,
-  IO::InitialConditionsManager &        initial_conditions_manager)
+  Topo::Topology &                      topology)
   : AnalysisBase(analysis_manager, "HBNOISE"),
     StepEventListener(&analysis_manager),
     analysisManager_(analysis_manager),
@@ -195,7 +194,7 @@ HBNOISE::HBNOISE(
     nonlinearManager_(nonlinear_manager),
     deviceManager_(device_manager),
     topology_(topology),
-    initialConditionsManager_(initial_conditions_manager),
+    outputManagerAdapter_(analysis_manager.getOutputManagerAdapter()),
     pdsMgrPtr_(0),
     currentAnalysisObject_(0),
     hbLoaderPtr_(0),
@@ -216,15 +215,21 @@ HBNOISE::HBNOISE(
     dataSpecification_(false),
     hbnoiseLoopSize_(0),
     hbAnalysis_(0),
-    bNoiseVecRealPtr(linearSystem_.builder().createVector()),
-    bNoiseVecImagPtr(linearSystem_.builder().createVector()),
+    bNoiseVecPtr(linearSystem_.builder().createVector()),
+    // bNoiseVecRealPtr(linearSystem_.builder().createVector()),
+    // bNoiseVecImagPtr(linearSystem_.builder().createVector()),
     calcNoiseIntegrals_(true),
+    totalAMNoiseDens_(0.0),
+    totalPMNoiseDens_(0.0),
     freq_(0.0),
     size_(0),
     period_(0.0)
 {
-  bNoiseVecRealPtr->putScalar(0.0);
-  bNoiseVecImagPtr->putScalar(0.0);
+  bNoiseVecPtr->putScalar(0.0);
+  // bNoiseVecRealPtr->putScalar(0.0);
+  // bNoiseVecImagPtr->putScalar(0.0);
+
+  outputManagerAdapter_.setDotHBNOISESpecified(true);
   
   pdsMgrPtr_ = analysisManager_.getPDSManager();
 
@@ -380,6 +385,7 @@ bool HBNOISE::doInit()
   }
   // get the frequency from the HB analysis
   size_ = hbAnalysis_->size_;
+  numHarms_ = (size_-1)/2;
   freq_ = freqs[0];
   omega_ = 2.0*M_PI*freq_;
   period_ = 1.0/freq_;
@@ -501,8 +507,9 @@ bool HBNOISE::doLoopProcess()
 {
   bool bsuccess = true;
 
-  analysisManager_.pushActiveAnalysis(hbAnalysis_);
+  // analysisManager_.pushActiveAnalysis(hbAnalysis_);
   bsuccess = hbAnalysis_->run();
+  analysisManager_.pushActiveAnalysis(this);
   // add if fails ...
 
   // save the mag & phase of solution for AM/PM noise calculations
@@ -664,6 +671,7 @@ bool HBNOISE::doLoopProcess()
   //       (AnalysisEvent(AnalysisEvent::STEP_FAILED, AnalysisEvent::NOISE, currentFreq_, currentStep));
   //     doProcessFailedStep();
   //   }
+      doProcessSuccessfulStep();
   }
 
   // Xyce::Parallel::AllReduce(comm.comm(), MPI_SUM, &totalOutputNoise_, 1);
@@ -689,7 +697,8 @@ bool HBNOISE::doLoopProcess()
 // Creator       : Meysam Bahmanian
 // Creation Date : 6/5/2025
 //-----------------------------------------------------------------------------
-void HBNOISE::clearNoiseIntegrals_() {
+void HBNOISE::clearNoiseIntegrals_() 
+{
   int numNoiseDevices = loader_.getNumNoiseDevices();
   // clear out the integral arrays
 
@@ -755,8 +764,9 @@ void HBNOISE::setupAdjointRHS_()
   Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
   Parallel::Communicator &comm = *(pds_manager.getPDSComm());
 
-  bNoiseVecRealPtr->putScalar(0.0);
-  bNoiseVecImagPtr->putScalar(0.0);
+  bNoiseVecPtr->putScalar(0.0);
+  // bNoiseVecRealPtr->putScalar(0.0);
+  // bNoiseVecImagPtr->putScalar(0.0);
 
   int numOutVars = outputVarNames_.size();
   for (int iout=0;iout<numOutVars;++iout)
@@ -766,17 +776,14 @@ void HBNOISE::setupAdjointRHS_()
     {
       double val=1.0;
       if (iout>0) val=-1.0;
-      bNoiseVecRealPtr->setElementByGlobalIndex( tmpGID, val, 0);
+      bNoiseVecPtr->setElementByGlobalIndex( tmpGID, val, 0);
     }
   }
-  bNoiseVecRealPtr->fillComplete();
+  bNoiseVecPtr->fillComplete();
   if (DEBUG_ANALYSIS)
   {
-    Xyce::dout() << "bNoiseVecRealPtr:" << std::endl;
-    bNoiseVecRealPtr->print(Xyce::dout());
-    Xyce::dout() << std::endl;
-    Xyce::dout() << "bNoiseVecImagPtr:" << std::endl;
-    bNoiseVecImagPtr->print(Xyce::dout());
+    Xyce::dout() << "bNoiseVecPtr:" << std::endl;
+    bNoiseVecPtr->print(Xyce::dout());
     Xyce::dout() << std::endl;
   }
 }
@@ -924,21 +931,21 @@ void HBNOISE::resetAdjointHBNOISELinearSystem_()
   if (harmonicNumber_ == 0)
   { // baseband noise
     // baseband has just in-phase component
-    harmonicSpaceBI_->block( 0 ).update( 1.0, *bNoiseVecRealPtr);
+    harmonicSpaceBI_->block( 0 ).update( 1.0, *bNoiseVecPtr);
   }
   else
   {
     // in-phase
     // RHS is positive
-    harmonicSpaceBI_->block( 4*harmonicNumber_ - 2 ).update( +outputValCosPhi_, *bNoiseVecRealPtr);
+    harmonicSpaceBI_->block( 4*harmonicNumber_ - 2 ).update( +outputValCosPhi_, *bNoiseVecPtr);
     // RHS is negative
-    harmonicSpaceBI_->block( 4*harmonicNumber_     ).update( +outputValSinPhi_, *bNoiseVecImagPtr);
+    harmonicSpaceBI_->block( 4*harmonicNumber_     ).update( +outputValSinPhi_, *bNoiseVecPtr);
 
     // quadrature
     // RHS is positive
-    harmonicSpaceBQ_->block( 4*harmonicNumber_ - 2 ).update( -outputValSinPhi_, *bNoiseVecRealPtr);
+    harmonicSpaceBQ_->block( 4*harmonicNumber_ - 2 ).update( -outputValSinPhi_, *bNoiseVecPtr);
     // RHS is negative
-    harmonicSpaceBQ_->block( 4*harmonicNumber_     ).update( +outputValCosPhi_, *bNoiseVecImagPtr);
+    harmonicSpaceBQ_->block( 4*harmonicNumber_     ).update( +outputValCosPhi_, *bNoiseVecPtr);
   }
   if (DEBUG_ANALYSIS)
   {
@@ -971,7 +978,7 @@ bool HBNOISE::solveAdjointHBNOISE_()
   int linearStatus = blockSolverI_->solveTranspose();
   if (linearStatus != 0)
   {
-    Xyce::dout() << "Linear solve for in-phase exited with error: " << linearStatus;
+    Xyce::dout() << "Linear solve for in-phase exited with error: " << linearStatus << std::endl;
     bsuccess = false;
   }
 
@@ -980,69 +987,18 @@ bool HBNOISE::solveAdjointHBNOISE_()
   linearStatus = blockSolverQ_->solveTranspose();
   if (linearStatus != 0)
   {
-      Xyce::dout() << "Linear solve for quadrature exited with error: " << linearStatus;
+      Xyce::dout() << "Linear solve for quadrature exited with error: " << linearStatus << std::endl;
       bsuccess = false;
     }
   }
 
+  Xyce::dout() << "Preparing output vectors for in-phase adjoint solve: " << std::endl;
+  prepareHBNOISEOutputVectors_(harmonicSpaceXI_, noiseDataVecVecI_, noiseDataVecI_, totalAMNoiseDens_);
 
-  //   totalInPhaseNoiseDens_ += noiseDataVecVec_[0][i]->totalOutputNoise;
-  //   if (harmonicNumber_ != 0)
-  //   {
-  //     totalQuadratureNoiseDens_ += noiseDataVecVec_[1][i]->totalOutputNoise;
-  //   }
-  // }
-
-  // for (int i=0;i<numNoiseDevices;++i)
-  // {
-  //   int numNoiseThisDevice = noiseDataVec_[i]->numSources;
-
-  //   noiseDataVec_[i]->totalNoise = 0.0;
-  //   noiseDataVec_[i]->totalOutputNoise = 0.0;
-  //   for (int j=0;j<numNoiseThisDevice;++j)
-  //   {
-  //     int li_Pos = noiseDataVec_[i]->li_Pos[j];
-  //     int li_Neg = noiseDataVec_[i]->li_Neg[j];
-  //     int li_PosCorl = noiseDataVec_[i]->li_PosCorl[j];
-  //     int li_NegCorl = noiseDataVec_[i]->li_NegCorl[j];
-  //     double gain = 0.0;
-
-  //     // if two sets of nodes available, calculate correlated gain.
-  //     // otherwise, calculate uncorrelated gain.
-  //     if ((li_PosCorl != -1) && (li_NegCorl != -1))
-  //     {
-  //       double realVal1 = ((li_Pos!=-1)?Xreal[li_Pos]:0) - ((li_Neg!=-1)?Xreal[li_Neg]:0);
-  //       double imagVal1 = ((li_Pos!=-1)?Ximag[li_Pos]:0) - ((li_Neg!=-1)?Ximag[li_Neg]:0);
-  //       double realVal2 = ((li_PosCorl!=-1)?Xreal[li_PosCorl]:0) - ((li_NegCorl!=-1)?Xreal[li_NegCorl]:0);
-  //       double imagVal2 = ((li_PosCorl!=-1)?Ximag[li_PosCorl]:0) - ((li_NegCorl!=-1)?Ximag[li_NegCorl]:0);
-  //       double realOut = noiseDataVec_[i]->T0 * realVal1 + noiseDataVec_[i]->T2 * realVal2 - noiseDataVec_[i]->T3 * imagVal2;
-  //       double imagOut = noiseDataVec_[i]->T0 * imagVal1 + noiseDataVec_[i]->T2 * imagVal2 + noiseDataVec_[i]->T3 * realVal2;
-  //       gain = (realOut*realOut) + (imagOut*imagOut);
-  //     }
-  //     else
-  //     {
-  //       double realVal = ((li_Pos!=-1)?Xreal[li_Pos]:0) - ((li_Neg!=-1)?Xreal[li_Neg]:0);
-  //       double imagVal = ((li_Pos!=-1)?Ximag[li_Pos]:0) - ((li_Neg!=-1)?Ximag[li_Neg]:0);
-  //       gain = (realVal*realVal) + (imagVal*imagVal);
-  //     }
-
-  //     noiseDataVec_[i]->totalNoise += fabs(noiseDataVec_[i]->noiseDens[j]);
-  //     noiseDataVec_[i]->outputNoiseDens[j] = gain * fabs(noiseDataVec_[i]->noiseDens[j]);
-  //     noiseDataVec_[i]->lnNoiseDens[j] = std::log(std::max( noiseDataVec_[i]->outputNoiseDens[j],N_MINLOG) );
-  //     noiseDataVec_[i]->inputNoiseDens[j] = noiseDataVec_[i]->outputNoiseDens[j] * GainSqInv_;
-  //     noiseDataVec_[i]->totalOutputNoise += noiseDataVec_[i]->outputNoiseDens[j];
-  //   }
-  //   noiseDataVec_[i]->totalInputNoise = noiseDataVec_[i]->totalOutputNoise * GainSqInv_;
-  //   totalOutputNoiseDens_ += noiseDataVec_[i]->totalOutputNoise;
-  // }
-  // Xyce::Parallel::AllReduce(comm.comm(), MPI_SUM, &totalOutputNoiseDens_, 1);
-  // totalInputNoiseDens_ += totalOutputNoiseDens_ * GainSqInv_;
-
-  // if (comm.isSerial() )
-  // {
-  //   // FIX:  replace this output call!
-  //   hackTecplotOutput();
-  // }
+  if (harmonicNumber_ != 0) {
+    Xyce::dout() << "Preparing output vectors for quadrature adjoint solve: " << std::endl;
+    prepareHBNOISEOutputVectors_(harmonicSpaceXQ_, noiseDataVecVecQ_, noiseDataVecQ_, totalPMNoiseDens_);
+  }
 
   return bsuccess;
 }
@@ -1078,10 +1034,17 @@ bool HBNOISE::solveAdjointHBNOISE_()
 // H_R = +dv_C/db_C
 // H_I = -dv_C/db_S
 // Now for the noise sources, we have:
-// b = b_C * cos(wm*t) - b_S * sin(wm*t) + b_CI * cos(wc*t) - b_SQ * sin(wc*t)
 
+// form of b_ in harmonic space:
+// b = b_C0 * cos(wm*t) - b_S0 * sin(wm*t) + b_CLk * cos(k*wc*t-wm*t) - b_SLk * sin(k*wc*t-wm*t) + b_CUk * cos(k*wc*t+wm*t) - b_SUk * sin(k*wc*t+wm*t)
+// C/S is cosine/since and L/U is lower/upper sideband
 
-void HBNOISE::prepareHBNOISEOutputVectors_()
+void HBNOISE::prepareHBNOISEOutputVectors_(
+  Linear::BlockVector *           harmonicSpaceX,
+  std::vector<std::vector<Xyce::Analysis::NoiseData*> > &noiseDataVecVec,
+  std::vector<Xyce::Analysis::NoiseData*> &noiseDataVec,
+  double &totalNoiseDens
+  )
 {
   double omega =  2.0 * M_PI * currentFreq_;
 
@@ -1091,171 +1054,151 @@ void HBNOISE::prepareHBNOISEOutputVectors_()
   // baseband
   for (int i=0;i<numNoiseDevices;++i)
   {
-    (noiseDataVecVecI_[0][i])->omega = omega;
-    (noiseDataVecVecI_[0][i])->freq = currentFreq_;
+    (noiseDataVecVec[0][i])->omega = omega;
+    (noiseDataVecVec[0][i])->freq = currentFreq_;
   }
-  loader_.getNoiseSources(noiseDataVecVecI_[0]);
+  loader_.getNoiseSources(noiseDataVecVec[0]);
 
   // harmonics
-  // the noise data vector for the harmonics are dual use: The device noise PSDs are loaded for the upper and lower sidebands around the harmonics,
-  // but they store the noise PSDs of the nodes in in-phase and quadrature format.
+  // the noise data vector for the harmonics: The device noise PSDs are loaded for the upper and lower sidebands around the harmonics,
   for (int i = 1; i <= numHarms; ++i) {
     for (int j = 0; j < numNoiseDevices; ++j) {
       // lower sideband
-      (noiseDataVecVecI_[2*i-1][j])->omega = i*omega_ - omega;
-      (noiseDataVecVecI_[2*i-1][j])->freq = i*freq_ - currentFreq_;
+      (noiseDataVecVec[2*i-1][j])->omega = i*omega_ - omega;
+      (noiseDataVecVec[2*i-1][j])->freq = i*freq_ - currentFreq_;
 
       // upper sideband
-      (noiseDataVecVecI_[2*i  ][j])->omega = i*omega_ + omega;
-      (noiseDataVecVecI_[2*i  ][j])->freq = i*freq_ + currentFreq_;
+      (noiseDataVecVec[2*i  ][j])->omega = i*omega_ + omega;
+      (noiseDataVecVec[2*i  ][j])->freq = i*freq_ + currentFreq_;
     }
-    loader_.getNoiseSources(noiseDataVecVecI_[2*i-1]);
-    loader_.getNoiseSources(noiseDataVecVecI_[2*i  ]);
+    loader_.getNoiseSources(noiseDataVecVec[2*i-1]);
+    loader_.getNoiseSources(noiseDataVecVec[2*i  ]);
   }
 
   // for baseband we had just two vectors real/imag. 
   // for harmonic space we have 2 vectors for the baseband and 4 vectors for each harmonic
-  // storage for the in-phase solve vectors
-  std::vector< Teuchos::RCP<Linear::Vector> > outputVectors_;
+  // storage for the solve vectors
+  std::vector< Teuchos::RCP<Linear::Vector> > outputVectors;
   for (int i = 0; i < 4*numHarms+2; ++i) 
   {
-    outputVectors_.push_back( rcp(linearSystem_.builder().createVector()) );
+    outputVectors.push_back( rcp(linearSystem_.builder().createVector()) );
   }
 
-  copyFromBlockVector( *harmonicSpaceXI_, outputVectors_);
-  Teuchos::RCP<Linear::Vector> dummyVector = rcp(linearSystem_.builder().createVector());
-  dummyVector->putScalar(0.0);
-
-  std::vector<Linear::Vector & > XIreal_; // length is numHarms+1
-  std::vector<Linear::Vector & > XIimag_; // length is numHarms+1
-  std::vector<Linear::Vector & > XQreal_; // length is numHarms+1, first element for baseband is dummy
-  std::vector<Linear::Vector & > XQimag_; // length is numHarms+1, first element for baseband is dummy
-
-  // baseband
-  XIreal_.push_back( *(outputVectors_[0]) );
-  XIimag_.push_back( *(outputVectors_[1]) );
-  XQreal_.push_back( *dummyVector );
-  XQimag_.push_back( *dummyVector );
-
-  // harmonics
-  for (int i = 1; i <= numHarms; ++i) {
-    XIreal_.push_back( *(outputVectors_[4*i-2]) );
-    XIimag_.push_back( *(outputVectors_[4*i-1]) );
-    XQreal_.push_back( *(outputVectors_[4*i  ]) );
-    XQimag_.push_back( *(outputVectors_[4*i+1]) );
-  }
+  copyFromBlockVector( *harmonicSpaceX, outputVectors);
 
   if (DEBUG_ANALYSIS)
   {
     // baseband components
-    std::cout << "XIreal at baseband adjoint solve: ------------------------------------"<<std::endl;
-    XIreal_[0].print( Xyce::dout() );
-    std::cout << "XIimag at baseband adjoint solve: ------------------------------------"<<std::endl;
-    XIimag_[0].print( Xyce::dout() );
+    Xyce::dout() << "d(o)/d(b_ real) at baseband adjoint solve:" << std::endl;
+    outputVectors[0]->print( Xyce::dout() );
+    Xyce::dout() << "d(o)/d(b_ imag) at baseband adjoint solve:" << std::endl;
+    outputVectors[1]->print( Xyce::dout() );
 
     // harmonics components
     for (int i = 1; i <= numHarms; ++i) 
     {
-      std::cout << "XIreal at " << i << "th harmonic adjoint solve: ------------------------------------"<<std::endl;
-      XIreal_[i].print( Xyce::dout() );
-      std::cout << "XIimag at " << i << "th harmonic adjoint solve: ------------------------------------"<<std::endl;
-      XIimag_[i].print( Xyce::dout() );
-      std::cout << "XQreal at " << i << "th harmonic adjoint solve: ------------------------------------"<<std::endl;
-      XQreal_[i].print( Xyce::dout() );
-      std::cout << "XQimag at " << i << "th harmonic adjoint solve: ------------------------------------"<<std::endl;
-      XQimag_[i].print( Xyce::dout() );
+      Xyce::dout() << "d(o)/d(b_ LSB real) at harmonic " << i << " adjoint solve:" << std::endl;
+      outputVectors[4*i-2]->print( Xyce::dout() );
+      Xyce::dout() << "d(o)/d(b_ LSB imag) at harmonic " << i << " adjoint solve:" << std::endl;
+      outputVectors[4*i-1]->print( Xyce::dout() );
+      Xyce::dout() << "d(o)/d(b_ USB real) at harmonic " << i << " adjoint solve:" << std::endl;
+      outputVectors[4*i  ]->print( Xyce::dout() );
+      Xyce::dout() << "d(o)/d(b_ USB imag) at harmonic " << i << " adjoint solve:" << std::endl;
+      outputVectors[4*i+1]->print( Xyce::dout() );
 
-      std::cout << "------------------------------------"<<std::endl;
+      Xyce::dout() << std::endl;
     }
   }
 
   Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
   Parallel::Communicator &comm = *(pds_manager.getPDSComm());
 
-  totalInPhaseNoiseDens_ = 0.0;
-  totalQuadratureNoiseDens_ = 0.0;
+  totalNoiseDens = 0.0;
 
   for (int i = 0; i < numNoiseDevices; ++i) 
   { // select a noise device
-    int numNoiseThisDevice = noiseDataVecVecI_[0][i]->numSources;
-
-    // initialize the total noise densities for the device at all harmonics
-    for (int k = 0; k <= numHarms; ++k) 
-    {
-      if (k==0) 
-      { // baseband
-        noiseDataVecVecI_[0][i]->totalNoise = 0.0;
-        noiseDataVecVecI_[0][i]->totalOutputNoise = 0.0;
-      } else 
-      { // harmonics
-        // contribution from in-phase component of the noise harmonic
-        noiseDataVecVecI_[2*k-1][i]->totalNoise = 0.0;
-        noiseDataVecVecI_[2*k-1][i]->totalOutputNoise = 0.0;
-
-        // contribution from quadrature component of the noise harmonic
-        noiseDataVecVecI_[2*k  ][i]->totalNoise = 0.0;
-        noiseDataVecVecI_[2*k  ][i]->totalOutputNoise = 0.0;
-      }
-    }
-
-    // We constructed the harmonic space matrix based on the in-phase and quadrature components.
-    // However, the noise-source PSDs are not referenced to a carrier frequency and do not have in-phase and quadrature components.
-    // So we need to convert the noise PSDs to in-phase and quadrature components.
-    // For flat PSDs, it is straightforward. The I/Q components are 3 dB below the noise PSD.
-    // For non-flat PSDs (for instance, flicker noise), the conversion to I/Q components creates a weak correlation between the in-phase and quadrature components.
-    // I say weak, because around RF freuqncies, we have PSDs proportional to 1/(wc+wm) and 1/(wc-wm) for USB and LSB, respectively.
-    // If wc is large and wm is small, the noise PSDs are almost flat.
-    // I will do the calculation with flattened PSDs. This has to be corrected later.
-
-    // Suggestion for NoiseData class:
-    // I think it would be nice to to store the gain and even the phase of the noise transfer functions and print them upon request.
-    // The PSDs of the noise sources are also lost after each frequency is swept. 
-    // Maybe additional function like DNI/DNO is needed to print the PSDs for user's post processing.
-    for (int j = 0; j < numNoiseThisDevice; ++j) 
-    { // select a noise source in noise device
-      for (int k = 0; k <= numHarms; ++k) 
-      { // select a harmonic to calculate the gain at this noise harmonic frequency (NOT SIGNAL HARMONIC FREQUENCY)
-        double gain = 0.0;
-        if (k==0) 
-        {
-          // baseband
-        } else 
-        {
-          // harmonics
-        }
-
-        // now we have the gain for the noise source of the noise device at the noise harmonic frequency
-        // we now calculate the contribution of each noise source at each noise harmonic frequency to the output noise density
-        if (k==0) 
-        { // baseband
-          noiseDataVecVecI_[0][i]->totalNoise += fabs(noiseDataVecVecI_[0][i]->noiseDens[j]);
-          noiseDataVecVecI_[0][i]->outputNoiseDens[j] = gain * fabs(noiseDataVecVecI_[0][i]->noiseDens[j]);
-          noiseDataVecVecI_[0][i]->lnNoiseDens[j] = std::log(std::max( noiseDataVecVecI_[0][i]->outputNoiseDens[j],N_MINLOG) );
-          noiseDataVecVecI_[0][i]->totalOutputNoise += noiseDataVecVecI_[0][i]->outputNoiseDens[j];
-        } else 
-        { // harmonics
-          // we stored LSB noise in noiseDataVecVecI_[2*k-1] and USB noise in noiseDataVecVecI_[2*k]
-          // I flatten the PSDs based on the LSB component in noiseDataVecVecI_[2*k-1]
-          // and calculate I/Q components under this assumption.
-          // Although a good approximation, but not 100% accurate.
-          // I will correct this later.
-
-          // contribution from the in-phase component of the noise harmonic
-          noiseDataVecVecI_[2*k-1][i]->totalNoise += fabs(noiseDataVecVecI_[2*k-1][i]->noiseDens[j]);
-          noiseDataVecVecI_[2*k-1][i]->outputNoiseDens[j] = gain * fabs(noiseDataVecVecI_[2*k-1][i]->noiseDens[j]); // noiseDataVecVecI_[2*k-1][i]->noiseDens[j] is LSB noise PSD (USB is not used for now)
-          noiseDataVecVecI_[2*k-1][i]->lnNoiseDens[j] = std::log(std::max( noiseDataVecVecI_[2*k-1][i]->outputNoiseDens[j],N_MINLOG) );
-          noiseDataVecVecI_[2*k-1][i]->totalOutputNoise += noiseDataVecVecI_[2*k-1][i]->outputNoiseDens[j];
-
-          // contribution from the quadrature component of the noise harmonic
-          noiseDataVecVecI_[2*k  ][i]->totalNoise += fabs(noiseDataVecVecI_[2*k  ][i]->noiseDens[j]);
-          noiseDataVecVecI_[2*k  ][i]->outputNoiseDens[j] = gain * fabs(noiseDataVecVecI_[2*k-1][i]->noiseDens[j]); // noiseDataVecVecI_[2*k-1][i]->noiseDens[j] is LSB noise PSD (USB is not used for now)
-          noiseDataVecVecI_[2*k  ][i]->lnNoiseDens[j] = std::log(std::max( noiseDataVecVecI_[2*k  ][i]->outputNoiseDens[j],N_MINLOG) );
-          noiseDataVecVecI_[2*k  ][i]->totalOutputNoise += noiseDataVecVecI_[2*k  ][i]->outputNoiseDens[j];
-        }
-      }
+    for (int k = 0; k < 2*numHarms+1; ++k) 
+    { // sweeping over noise harmonics
+      evalDeviceNoiseDensities(*(noiseDataVecVec[k][i]), *(outputVectors[2*k]), *(outputVectors[2*k+1]));
     }
   }
+
+  // now we sum over the noise sidebands of all harmonics and store the results in the noiseDataVec
+  for (int i = 0; i < numNoiseDevices; ++i) 
+  {
+    noiseDataVec[i]->totalNoise = 0.0;       // not used
+    noiseDataVec[i]->totalOutputNoise = 0.0;
+    for (int k = 0; k < 2*numHarms+1; ++k) 
+    {
+      noiseDataVec[i]->totalOutputNoise += noiseDataVecVec[k][i]->totalOutputNoise;
+    }
+    totalNoiseDens += noiseDataVec[i]->totalOutputNoise;
+  }
+
+  // reduce the total noise density over all processors
+  Xyce::Parallel::AllReduce(comm.comm(), MPI_SUM, &totalNoiseDens, 1);
+
+  // if (comm.isSerial() )
+  // {
+  //   // FIX:  replace this output call!
+  //   hackTecplotOutput();
+  // }
 }
+
+//-----------------------------------------------------------------------------
+// Function      : HBNOISE::evalDeviceNoiseDensities
+// Purpose       : Evaluates the noise densities for a given device
+// Special Notes : This function is used to evaluate the noise densities for a given device
+// Scope         : This function is used to evaluate the noise densities for a given device
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/7/2025
+//-----------------------------------------------------------------------------
+inline void HBNOISE::evalDeviceNoiseDensities(
+  Xyce::Analysis::NoiseData&    noiseData, 
+  Linear::Vector&               Xreal, 
+  Linear::Vector&               Ximag) 
+  {
+  int numNoiseThisDevice = noiseData.numSources;
+
+  noiseData.totalNoise = 0.0;                  // not used
+  noiseData.totalOutputNoise = 0.0;            // total output noise density of the device
+  noiseData.relativeNoiseDensTotal = 0.0;      // total AM or PM noise density of the device
+  for (int j=0;j<numNoiseThisDevice;++j)
+  {
+    int li_Pos = noiseData.li_Pos[j];
+    int li_Neg = noiseData.li_Neg[j];
+    int li_PosCorl = noiseData.li_PosCorl[j];
+    int li_NegCorl = noiseData.li_NegCorl[j];
+
+    // if two sets of nodes available, calculate correlated gain.
+    // otherwise, calculate uncorrelated gain.
+    if ((li_PosCorl != -1) && (li_NegCorl != -1))
+    {
+      double realVal1 = ((li_Pos!=-1)?Xreal[li_Pos]:0) - ((li_Neg!=-1)?Xreal[li_Neg]:0);
+      double imagVal1 = ((li_Pos!=-1)?Ximag[li_Pos]:0) - ((li_Neg!=-1)?Ximag[li_Neg]:0);
+      double realVal2 = ((li_PosCorl!=-1)?Xreal[li_PosCorl]:0) - ((li_NegCorl!=-1)?Xreal[li_NegCorl]:0);
+      double imagVal2 = ((li_PosCorl!=-1)?Ximag[li_PosCorl]:0) - ((li_NegCorl!=-1)?Ximag[li_NegCorl]:0);
+      double realOut = noiseData.T0 * realVal1 + noiseData.T2 * realVal2 - noiseData.T3 * imagVal2;
+      double imagOut = noiseData.T0 * imagVal1 + noiseData.T2 * imagVal2 + noiseData.T3 * realVal2;
+      noiseData.gainSqr[j] = (realOut*realOut) + (imagOut*imagOut);
+    }
+    else
+    {
+      double realVal = ((li_Pos!=-1)?Xreal[li_Pos]:0) - ((li_Neg!=-1)?Xreal[li_Neg]:0);
+      double imagVal = ((li_Pos!=-1)?Ximag[li_Pos]:0) - ((li_Neg!=-1)?Ximag[li_Neg]:0);
+      noiseData.gainSqr[j] = (realVal*realVal) + (imagVal*imagVal);
+    }
+
+    noiseData.totalNoise += fabs(noiseData.noiseDens[j]); // sum of all noise sources of the device (not sure what this is for!)
+    noiseData.outputNoiseDens[j] = noiseData.gainSqr[j] * fabs(noiseData.noiseDens[j]); // output noise density of the j'th noise source
+    noiseData.lnNoiseDens[j] = std::log(std::max( noiseData.outputNoiseDens[j],N_MINLOG) ); // log of output noise density of the j'th noise source
+    noiseData.relativeNoiseDens[j] = noiseData.outputNoiseDens[j] / outputValSqr_; // AM or PM noise density
+    noiseData.totalOutputNoise += noiseData.outputNoiseDens[j]; // total output noise density of the device
+    noiseData.relativeNoiseDensTotal += noiseData.relativeNoiseDens[j]; // total AM or PM noise density of the device
+  }
+}
+
+
 
 
 //-----------------------------------------------------------------------------
@@ -1406,12 +1349,12 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
       Gf_[i]->print(Xyce::dout());
       Xyce::dout() << std::endl;
     }
-    Xyce::dout() << "Reporting Cf_ Matrices, each array element is a row of the matrix, each block is a node" << std::endl;
-    for (int i=0; i<BlockSize; i++){
-      Xyce::dout() << "Cf_[" << i << "]: " << std::endl;
-      Cf_[i]->print(Xyce::dout());
-      Xyce::dout() << std::endl;
-    }
+    // Xyce::dout() << "Reporting Cf_ Matrices, each array element is a row of the matrix, each block is a node" << std::endl;
+    // for (int i=0; i<BlockSize; i++){
+    //   Xyce::dout() << "Cf_[" << i << "]: " << std::endl;
+    //   Cf_[i]->print(Xyce::dout());
+    //   Xyce::dout() << std::endl;
+    // }
   }
 
   Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
@@ -1475,13 +1418,13 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_(){
   {
     Xyce::dout() << "Reporting harmonicSpaceMatrix_G_:" << std::endl;
     harmonicSpaceMatrix_G_->print(Xyce::dout());
-    Xyce::dout() << "Reporting harmonicSpaceMatrix_omegaC_0_:" << std::endl;
-    harmonicSpaceMatrix_omegaC_0_->print(Xyce::dout());
-    Xyce::dout() << "Reporting harmonicSpaceMatrix_omegaC_1_:" << std::endl;
-    harmonicSpaceMatrix_omegaC_1_->print(Xyce::dout());
-    Xyce::dout() << "Reporting harmonicSpaceMatrix_C_2_:" << std::endl;
-    harmonicSpaceMatrix_C_2_->print(Xyce::dout());
-    Xyce::dout() << std::endl;
+    // Xyce::dout() << "Reporting harmonicSpaceMatrix_omegaC_0_:" << std::endl;
+    // harmonicSpaceMatrix_omegaC_0_->print(Xyce::dout());
+    // Xyce::dout() << "Reporting harmonicSpaceMatrix_omegaC_1_:" << std::endl;
+    // harmonicSpaceMatrix_omegaC_1_->print(Xyce::dout());
+    // Xyce::dout() << "Reporting harmonicSpaceMatrix_C_2_:" << std::endl;
+    // harmonicSpaceMatrix_C_2_->print(Xyce::dout());
+    // Xyce::dout() << std::endl;
   }
 
   // This will be the overal matrix to be solved for.
@@ -1584,7 +1527,7 @@ bool HBNOISE::updateHarmonicSpaceMatrix_G_()
         if (f==0)
         { // linear transformation
           // G_ij0 * [ V_jC*cos(wm*t) - V_jS*sin(wm*t) + 0.5*(+V_jeIC+V_jeQS)*cos(e*wc*t-wm*t) - 0.5*(-V_jeIS+V_jeQC)*sin(e*wc*t-wm*t) + 0.5*(+V_jeIC-V_jeQS)*cos(e*wc*t+wm*t) - 0.5*(+V_jeIS+V_jeQC)*sin(e*wc*t+wm*t) ]
-          for (int e=0; e<numHarms; e++){
+          for (int e=0; e<=numHarms; e++){
             if (e==0) 
             {
               // G_ij0 * [ V_jC*cos(wm*t) - V_jS*sin(wm*t) ]
@@ -2388,6 +2331,7 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
     {
       if (outputVarGIDs_[0] > -1)
       {
+        // TODO: correct for parallel
         // v1r = bXf.getElementByGlobalIndex(outputVarGIDs_[0], 2*harmonicNumber_  );
         // v1i = bXf.getElementByGlobalIndex(outputVarGIDs_[0], 2*harmonicNumber_+1);
         v1r = bXf.block(outputVarGIDs_[0])[2*harmonicNumber_  ];
@@ -2407,8 +2351,9 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
     }
     outputValReal_ = v1r - v2r;
     outputValImag_ = v1i - v2i;
-    outputValCosPhi_ = outputValReal_ / sqrt(outputValReal_*outputValReal_ + outputValImag_*outputValImag_);
-    outputValSinPhi_ = outputValImag_ / sqrt(outputValReal_*outputValReal_ + outputValImag_*outputValImag_);
+    outputValSqr_ = outputValReal_*outputValReal_ + outputValImag_*outputValImag_;
+    outputValCosPhi_ = outputValReal_ / sqrt(outputValSqr_);
+    outputValSinPhi_ = outputValImag_ / sqrt(outputValSqr_);
   }
 
   Teuchos::RCP<Linear::BlockVector> bXtPtr_ = hbBuilderPtr_->createTimeDomainBlockVector();
@@ -2564,9 +2509,9 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
       Xyce::dout() << std::endl;
 
       // print capacitance matrix
-      Xyce::dout() << "dQdxMatrixPtr time point of " << i << ":" << std::endl;
-      dQdxMatrixPtr->print( Xyce::dout() );
-      Xyce::dout() << std::endl;
+      // Xyce::dout() << "dQdxMatrixPtr time point of " << i << ":" << std::endl;
+      // dQdxMatrixPtr->print( Xyce::dout() );
+      // Xyce::dout() << std::endl;
     }
   }
 
@@ -2578,12 +2523,12 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
       Gt_[i]->print(Xyce::dout());
       Xyce::dout() << std::endl;
     }
-    Xyce::dout() << "Reporting Ct_ Matrices, each array element is a row of the matrix, each block is a time point" << std::endl;
-    for (int i=0; i<BlockSize; i++){
-      Xyce::dout() << "Ct_[" << i << "]: " << std::endl;
-      Ct_[i]->print(Xyce::dout());
-      Xyce::dout() << std::endl;
-    }
+    // Xyce::dout() << "Reporting Ct_ Matrices, each array element is a row of the matrix, each block is a time point" << std::endl;
+    // for (int i=0; i<BlockSize; i++){
+    //   Xyce::dout() << "Ct_[" << i << "]: " << std::endl;
+    //   Ct_[i]->print(Xyce::dout());
+    //   Xyce::dout() << std::endl;
+    // }
   }
 
   return true;
@@ -2615,6 +2560,16 @@ void HBNOISE::setMatrixElement(Linear::Matrix& mat, int row, int col, double val
 //-----------------------------------------------------------------------------
 bool HBNOISE::doProcessSuccessfulStep()
 {
+  outputManagerAdapter_.outputHBNoise (
+    currentFreq_, 
+    fOffsetStart_, fOffsetStop_, 
+    harmonicSpaceXI_->block(0),  // I'm not sure what these paramenters in NOISE class do. They are needed for get values function, So I'm gonna pass them for now
+    harmonicSpaceXI_-> block(1), // I'm not sure what these paramenters in NOISE class do. They are needed for get values function, So I'm gonna pass them for now
+    totalAMNoiseDens_, 
+    totalPMNoiseDens_, 
+    noiseDataVecI_, 
+    noiseDataVecQ_);
+
   return true;
 }
 
@@ -3051,8 +3006,7 @@ public:
       nonlinearManager_(nonlinear_manager),
       loader_(loader),
       deviceManager_(device_manager),
-      topology_(topology),
-      initialConditionsManager_(initial_conditions_manager)
+      topology_(topology)
   {}
 
   virtual ~HBNOISEFactory()
@@ -3078,7 +3032,7 @@ public:
 
     HBNOISE *hbnoise = new HBNOISE(analysisManager_, linearSystem_,
                                   nonlinearManager_, loader_, deviceManager_,
-                                  topology_, initialConditionsManager_);
+                                  topology_);
 
     hbnoise->setAnalysisParams(hbnoiseAnalysisOptionBlock_);
     hbnoise->setLinSol(linSolOptionBlock_);
@@ -3126,7 +3080,6 @@ public:
   Loader::Loader &                      loader_;
   Device::DeviceMgr &                   deviceManager_;
   Topo::Topology &                      topology_;
-  IO::InitialConditionsManager &        initialConditionsManager_;
 
 private:
   Util::OptionBlock     hbnoiseAnalysisOptionBlock_;

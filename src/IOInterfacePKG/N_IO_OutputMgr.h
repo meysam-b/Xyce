@@ -156,6 +156,8 @@ public:
 
   bool registerNoise(const Util::OptionBlock & option_block);
 
+  bool registerHBNOISE(const Util::OptionBlock & option_block);
+
   void notify(const Analysis::StepEvent &step_event);
 
   void fixupPrintParameters(Parallel::Machine comm, PrintParameters &print_parameters);
@@ -278,6 +280,16 @@ public:
     double                              totalOutputNoiseDens_, 
     double                              totalInputNoiseDens_, 
     const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVec_);
+
+  void outputHBNoise(
+    Parallel::Machine                   comm,
+    double                              freq,
+    const Linear::Vector &              freqDomainSolnVecReal,
+    const Linear::Vector &              freqDomainSolnVecImaginary,
+    double                              totalAMNoiseDens_, 
+    double                              totalPMNoiseDens_, 
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI_,
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ_);
 
   void outputEmbeddedSampling(
     Parallel::Machine comm,
@@ -508,6 +520,11 @@ public:
     dotNoiseSpecified_ = value;
   }
 
+  void setDotHBNOISESpecified(bool value)
+  {
+    dotHBNOISESpecified_ = value;
+  }
+
   void setTaHBSpecified(bool value)
   {
     taHBSpecified_ = value;
@@ -713,6 +730,7 @@ private:
   bool                  dotOpSpecified_; // flag to indicate if the netlist has a .OP statement
   bool                  dotACSpecified_;    // flag to indicate if the netlist has a .AC statement
   bool                  dotNoiseSpecified_; // flag to indicate if the netlist has a .NOISE statement
+  bool                  dotHBNOISESpecified_; // flag to indicate if the netlist has a .HBNOISE statement
   bool                  taHBSpecified_;  // flag to indicate if Transient-Assisted HB was specified
   bool                  enableEmbeddedSamplingFlag_;
   bool                  enablePCEFlag_;
