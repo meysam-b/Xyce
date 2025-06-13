@@ -1487,6 +1487,19 @@ bool HBNOISE::createHarmonicSpaceLinearSystem_()
 // v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + (V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t))*cos(e*wc*t) - (V_jeQC*cos(wm*t) - V_jeQS*sin(wm*t))*sin(e*wc*t) // sum over e
 // v_j = V_jC*cos(wm*t) - V_jS*sin(wm*t) + 0.5*(+V_jeIC+V_jeQS)*cos(e*wc*t-wm*t) - 0.5*(-V_jeIS+V_jeQC)*sin(e*wc*t-wm*t) + 0.5*(+V_jeIC-V_jeQS)*cos(e*wc*t+wm*t) - 0.5*(+V_jeIS+V_jeQC)*sin(e*wc*t+wm*t)
 
+
+// *************** Syntax decryption ***************
+// G_ijfA : i/j are row/column indices; f is harmonic number; A is I or Q and means cosine or sine term
+// for dc we have just G_ij0
+// V_jeAB: j is the row index, e is the harmonic number, A is I (In-phase) or Q (Quadrature), B is C (Cosine) or S (Sine)
+// for dc we have just V_jC and V_jS
+// ***************      example      ***************
+// - 0.5 * G_ijfQ * V_jeIS * sin(f*wc*t+wm*t)
+// This equation defines setting a harmonic space matrix element.
+// sin(f*wc*t+wm*t) : this is USB sine term and has the row block-address of 4*f+1 in the RHS and consequently the column block-address of 4*f+1 in the LHS Matrix
+// V_jeIS : this is the j-th row of the LHS block-vector and consequently determinies the column index of the block-matrix
+// eIS determines the block address: eIC (4*e-2); eIS (4*e-1); eQC (4*e); eQS (4*e+1)
+
 bool HBNOISE::updateHarmonicSpaceMatrix_G_()
 {
   harmonicSpaceMatrix_G_->put( 0.0 );
@@ -1700,13 +1713,17 @@ bool HBNOISE::updateHarmonicSpaceMatrix_G_()
                 // + G_ijfI*cos(f*wc*t) * V_jeIC*cos(wm*t) * cos(e*wc*t) + G_ijfQ*sin(f*wc*t) * V_jeQC*cos(wm*t) * sin(e*wc*t)
                 // + 0.5*G_ijfI * V_jeIC*cos(wm*t) + 0.5*G_ijfQ * V_jeQC*cos(wm*t)
                 // RHS has positive sign
+                // + 0.5*G_ijfI * V_jeIC*cos(wm*t)
                 setMatrixElement(harmonicSpaceMatrix_G_->block(0, 4*e-2), i, j, +0.5*2*Gf_[i]->block(j)[2*f  ]); // baseband cosine translated from in-phase cosine by in-phase G
+                // + 0.5*G_ijfQ * V_jeQC*cos(wm*t)
                 setMatrixElement(harmonicSpaceMatrix_G_->block(0, 4*e  ), i, j, +0.5*2*Gf_[i]->block(j)[2*f+1]); // baseband cosine translated from quadrature cosine by quadrature G
 
                 // - G_ijfI*cos(f*wc*t) * V_jeIS*sin(wm*t) * cos(e*wc*t) - G_ijfQ*sin(f*wc*t) * V_jeQS*sin(wm*t) * sin(e*wc*t)
                 // - 0.5*G_ijfI * V_jeIS*sin(wm*t) - 0.5*G_ijfQ * V_jeQS*sin(wm*t)
                 // RHS has negative sign
+                // - 0.5*G_ijfI * V_jeIS*sin(wm*t)
                 setMatrixElement(harmonicSpaceMatrix_G_->block(1, 4*e-1), i, j, +0.5*2*Gf_[i]->block(j)[2*f  ]); // baseband sine translated from in-phase sine by in-phase G
+                // - 0.5*G_ijfQ * V_jeQS*sin(wm*t)
                 setMatrixElement(harmonicSpaceMatrix_G_->block(1, 4*e+1), i, j, +0.5*2*Gf_[i]->block(j)[2*f+1]); // baseband sine translated from quadrature sine by quadrature G
               }
               else
@@ -1714,7 +1731,7 @@ bool HBNOISE::updateHarmonicSpaceMatrix_G_()
                 // here LSB and USB depend on the sign of delta, so I use the same structure as sigma case, but I call it conditional LSB and USB
                 // a conditional LSB can be both LSB and USB!
                 // a conditional USB can be both LSB and USB!
-                int sign = e>=f ? 1 : -1;
+                int sign = e>f ? 1 : -1;
                 int rowCosine = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
                 int rowSine   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
 
@@ -2194,7 +2211,7 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
             // - 0.5 * C_ij0 * V_jeIS * cos(e*wc*t+wm*t) *e*wc
             setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(4*e  , 4*e-1), i, j, -0.5*(e*omega_)*Cf_[i]->block(j)[0]);
             // - 0.5 * C_ij0 * V_jeQC * cos(e*wc*t+wm*t) *e*wc
-            setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(4*e  , 4*e+1), i, j, -0.5*(e*omega_)*Cf_[i]->block(j)[0]);
+            setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(4*e  , 4*e  ), i, j, -0.5*(e*omega_)*Cf_[i]->block(j)[0]);
 
             // USB sine
             // C_ij0 * [- 0.5*(+V_jeIC-V_jeQS)*sin(e*wc*t+wm*t) ] *e*wc
@@ -2292,19 +2309,23 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
               // [ C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) ] * [(- V_jeQC*cos(wm*t) + V_jeQS*sin(wm*t) )*cos(e*wc*t) - ( V_jeIC*cos(wm*t) - V_jeIS*sin(wm*t) )*sin(e*wc*t)] * e*wc
 
               // baseband cosine term:
-              // - C_ijfI*cos(f*wc*t) * V_jeQC * cos(wm*t) * cos(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIC * cos(wm*t) * sin(e*wc*t) // all *e*wc
+              // [ - C_ijfI*cos(f*wc*t) * V_jeQC * cos(wm*t) * cos(e*wc*t) + C_ijfQ*sin(f*wc*t) * V_jeIC * cos(wm*t) * sin(e*wc*t) ] *e*wc
               // at delta=0
               // - 0.5 * C_ijfI * V_jeQC * cos(wm*t) + 0.5 * C_ijfQ * V_jeIC * cos(wm*t) // all *e*wc
               // RHS has positive sign
-              setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(0, 4*e  ), i, j, -0.5*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]); // all *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(0, 4*e-2), i, j, -0.5*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]); 
+              // - 0.5 * C_ijfI * V_jeQC * cos(wm*t) *e*wc
+              setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(0, 4*e  ), i, j, -0.5*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]); 
+              // + 0.5 * C_ijfQ * V_jeIC * cos(wm*t) *e*wc
+              setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(0, 4*e-2), i, j, +0.5*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]); 
               
               // baseband sine term:
-              // + C_ijfI*cos(f*wc*t) * V_jeQS * sin(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeIS * sin(wm*t) * sin(e*wc*t) // all *e*wc
+              // [ + C_ijfI*cos(f*wc*t) * V_jeQS * sin(wm*t) * cos(e*wc*t) - C_ijfQ*sin(f*wc*t) * V_jeIS * sin(wm*t) * sin(e*wc*t) ] *e*wc
               // at delta=0
               // + 0.5 * C_ijfI * V_jeQS * sin(wm*t) - 0.5 * C_ijfQ * V_jeIS * sin(wm*t) // all *e*wc
               // RHS has negative sign
-              setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(1, 4*e+1), i, j, -0.5*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]); // all *e*wc
+              // + 0.5 * C_ijfI * V_jeQS * sin(wm*t) *e*wc
+              setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(1, 4*e+1), i, j, -0.5*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              // - 0.5 * C_ijfQ * V_jeIS * sin(wm*t) *e*wc
               setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(1, 4*e-1), i, j, +0.5*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]); 
 
             }
@@ -2361,9 +2382,9 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
               // - 0.25 * C_ijfI * V_jeQC * cos(delta*wc*t+wm*t) *e*wc
               setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e  ), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // + 0.25 * C_ijfQ * V_jeIC * cos(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e-2), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e-2), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
               // - 0.25 * C_ijfQ * V_jeQS * cos(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e+1), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e+1), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
 
               // conditional USB sine
               // + 0.5 *C_ijfI*cos(f*wc*t) * (-V_jeIC+V_jeQS)*sin(e*wc*t+wm*t) + 0.5 * C_ijfQ*sin(f*wc*t) * (+V_jeIS+V_jeQC)*cos(e*wc*t+wm*t) // all *e*wc
@@ -2375,9 +2396,9 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
               // + 0.25 * C_ijfI * V_jeQS * sin(delta*wc*t+wm*t) *e*wc
               setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e+1), i, j, -0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // - 0.25 * C_ijfQ * V_jeIS * sin(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e-1), i, j, -0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e-1), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
               // - 0.25 * C_ijfQ * V_jeQC * sin(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e  ), i, j, -0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e  ), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
             }
           } // end of e loop
         } // end of f!=0
@@ -2614,7 +2635,9 @@ bool HBNOISE::updateHarmonicSpaceMatrix_C_2_()
                 // at delta=0
                 // - 0.5 * C_ijfI * V_jeIS * cos(wm*t) - 0.5 * C_ijfQ * V_jeQS * cos(wm*t)
                 // RHS has positive sign
+                // - 0.5 * C_ijfI * V_jeIS * cos(wm*t)
                 setMatrixElement(harmonicSpaceMatrix_C_2_->block(0, 4*e-1), i, j, -0.5*2*Cf_[i]->block(j)[2*f  ]);
+                // - 0.5 * C_ijfQ * V_jeQS * cos(wm*t)
                 setMatrixElement(harmonicSpaceMatrix_C_2_->block(0, 4*e+1), i, j, -0.5*2*Cf_[i]->block(j)[2*f+1]); 
                 
                 // baseband sine term:
@@ -2622,7 +2645,9 @@ bool HBNOISE::updateHarmonicSpaceMatrix_C_2_()
                 // at delta=0
                 // - 0.5 * C_ijfI * V_jeIC * sin(wm*t) - 0.5 * C_ijfQ * V_jeQC * sin(wm*t)
                 // RHS has negative sign
+                // - 0.5 * C_ijfI * V_jeIC * sin(wm*t)
                 setMatrixElement(harmonicSpaceMatrix_C_2_->block(1, 4*e-2), i, j, +0.5*2*Cf_[i]->block(j)[2*f  ]);
+                // - 0.5 * C_ijfQ * V_jeQC * sin(wm*t)
                 setMatrixElement(harmonicSpaceMatrix_C_2_->block(1, 4*e  ), i, j, +0.5*2*Cf_[i]->block(j)[2*f+1]); 
 
               }
