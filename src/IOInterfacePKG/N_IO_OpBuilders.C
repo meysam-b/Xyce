@@ -361,7 +361,8 @@ struct CircuitNoiseContOpBuilder : public Util::Op::Builder
     std::string name;
     parameterNameAndArgs(name, args, it);
 
-    if (param_tag[0] == 'D' && args.size() > 0)
+    // if (param_tag[0] == 'D' && args.size() > 0) Modified by Meysam Bahmanian to avoid conflict with DAMN and DPMN operators
+    if ( ( param_tag == "DNI" || param_tag == "DNO" ) && args.size() > 0)
     {
       if (!analysisManager_.getNoiseFlag())
       {
@@ -523,6 +524,109 @@ struct CircuitPMNoiseOpBuilder : public Util::Op::Builder
 
   private:
   const OutputMgr &     outputManager_;
+  const Analysis::AnalysisManager &    analysisManager_;
+};
+
+//--------------------------------------------------------------------------
+// Structure     : Util::Op::Builder::CircuitHBNoiseContOpBuilder
+// Purpose       : This creates an either an OutputMgrAMNoiseContOp
+//               : or an OutputMgrPMNoiseContOp
+// Special Notes :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/11/2025
+//--------------------------------------------------------------------------
+struct CircuitHBNoiseContOpBuilder : public Util::Op::Builder
+{
+  CircuitHBNoiseContOpBuilder(const OutputMgr & output_manager,
+      const Analysis::AnalysisManager & analysis_manager)
+    : outputManager_(output_manager),
+    analysisManager_(analysis_manager)
+  {}
+
+  virtual ~CircuitHBNoiseContOpBuilder()
+  {}
+
+  virtual void registerCreateFunctions(Util::Op::BuilderManager &builder_manager) const
+  {
+    builder_manager.addCreateFunction<OutputMgrAMNoiseContOp>();
+    builder_manager.addCreateFunction<OutputMgrPMNoiseContOp>();
+  }
+
+  virtual Util::Op::Operator *makeOp(Util::ParamList::const_iterator &it) const
+  {
+    Util::Op::Operator *new_op = 0;
+    const std::string &param_tag = (*it).tag();
+
+    std::vector<std::string> args;
+    std::string name;
+    parameterNameAndArgs(name, args, it);
+
+    if ( ( param_tag == "DAN" || param_tag == "DPN" ) && args.size() > 0)
+    {
+      if (!analysisManager_.getHBNOISEFlag())
+      {
+        Report::UserError0() << "DAN and DPN operators only supported for .HBNOISE analyses";
+        return new_op;
+      }
+
+      // The DNO() and DNI() operators come in two forms.  For example, DNO(Q1) and DN(Q1,rc).
+      // So, we need to find the index of the device (in the noiseDataVec_ of the NOISE object),
+      // and then the index(es) of the requested noise type for that device, if the device has
+      // multiple types sources.
+      int devIndex = -1;
+      std::vector<int> typeIndex;
+      NodeNameMap::const_iterator nd_it =  outputManager_.getNoiseDeviceNameMap().find(args[0]+"_ND");
+      if (nd_it != outputManager_.getNoiseDeviceNameMap().end())
+        devIndex = (*nd_it).second;
+
+      // Now find the index(es) of the noise type, for the specified device, if one was requested.
+      if (args.size() == 2)
+      {
+        NodeNameMap::const_iterator nt_it = outputManager_.getNoiseTypeNameMap().begin();
+        int suffix = 0;
+
+        while ( !(nt_it == outputManager_.getNoiseTypeNameMap().end()) )
+        {
+          // For ADMS devices, that may have duplicate entries for a given noise type, the entries
+          // were "suffixed" with _0, _1, _2, ... .  If there were no duplicate entries, then just
+          // the _0 suffix was used.  So, the DNO and DNI operators use a vector-of-ints for
+          // typeIndex to handle this.
+          std::ostringstream s;
+          s << suffix;
+
+          std::string key = "noise_" + args[0] + "_" + args[1] + "_" + s.str();
+          nt_it = outputManager_.getNoiseTypeNameMap().find(key);
+          if (nt_it != outputManager_.getNoiseTypeNameMap().end())
+          {
+            typeIndex.push_back((*nt_it).second);
+            ++suffix;
+          }
+        }
+      }
+
+      // Only make the op if the relevant indices have been found.
+      // If not then this op will be flagged as in error, since new_op is still a null pointer
+      if ( (devIndex != -1) && ( ( args.size() == 1 ) || ((args.size() == 2) && !typeIndex.empty()) ) )
+      {
+        if (param_tag == "DAN")
+        {
+          new_op  = new OutputMgrAMNoiseContOp(name, devIndex, typeIndex, outputManager_);
+        }
+        else if (param_tag == "DPN")
+        {
+          new_op  = new OutputMgrPMNoiseContOp(name, devIndex, typeIndex, outputManager_);
+        }
+      }
+    }
+
+    if (new_op)
+      new_op->addArg(args[0]);
+
+    return new_op;
+  }
+
+  private:
+  const OutputMgr &                    outputManager_;
   const Analysis::AnalysisManager &    analysisManager_;
 };
 
@@ -1904,6 +2008,7 @@ void registerOpBuilders(
   op_builder_manager.addBuilder(new CircuitInputNoiseOpBuilder(output_manager,analysis_manager));
 
   // added by Meysam Bahmanian to support HBNOISE operators
+  op_builder_manager.addBuilder(new CircuitHBNoiseContOpBuilder(output_manager,analysis_manager));
   op_builder_manager.addBuilder(new CircuitAMNoiseOpBuilder(output_manager,analysis_manager));
   op_builder_manager.addBuilder(new CircuitPMNoiseOpBuilder(output_manager,analysis_manager));
 

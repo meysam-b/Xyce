@@ -1470,7 +1470,7 @@ bool extractOperatorData(const TokenVector &  parsed_line,
       msg << "Unrecognized noise specification";
       p_err = position;
     }
-   }
+  }
   else if( parsed_line[position].string_ == "W" || parsed_line[position].string_ == "w" ||
           parsed_line[position].string_ == "P" || parsed_line[position].string_ == "p")
   {

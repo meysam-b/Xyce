@@ -115,7 +115,7 @@ private:
     Linear::BlockVector *           harmonicSpaceX,
     std::vector<std::vector<Xyce::Analysis::NoiseData*> > &noiseDataVecVec,
     std::vector<Xyce::Analysis::NoiseData*> &noiseDataVec,
-    double &totalNoiseDens);
+    double &totalRelativeNoiseDens);
 
   void processOutputNodes ();
   

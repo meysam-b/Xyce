@@ -78,7 +78,7 @@ public:
     totalOutputNoise(0.0),
     totalInputNoise(0.0),
     relativeNoiseDens(0),
-    relativeNoiseDensTotal(0),
+    totalRelativeNoiseDens(0),
     gainSqr(0),
     numSources(0), 
     T0(0.0),
@@ -122,9 +122,9 @@ public:
   // Meysam Bahmanian
   // 6/10/2025
   // These variables are used to store the AM and PM noise densities for the device.
-  // "relative" means relative to the carrier. This can be used for both AM and PM noise densities.
+  // "relative" means relative to the carrier amplitude. This can be used for both AM and PM noise densities.
   std::vector<double> relativeNoiseDens;
-  double relativeNoiseDensTotal;
+  double totalRelativeNoiseDens;
   // I will also store the transfer function magnitudes for the device.
   // This will be especially useful for regression testing.
   std::vector<double> gainSqr;

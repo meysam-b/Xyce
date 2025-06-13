@@ -142,34 +142,6 @@ complex OutputMgrInputNoiseOp::get(const OutputMgrInputNoiseOp &op,
 }
 
 //-----------------------------------------------------------------------------
-// Function      : OutputMgrAMNoiseOp::get
-// Purpose       : get value for AM noise spectral density
-// Special Notes :
-// Scope         : public
-// Creator       : Meysam Bahmanian
-// Creation Date : 6/10/2025
-//-----------------------------------------------------------------------------
-complex OutputMgrAMNoiseOp::get(const OutputMgrAMNoiseOp &op, 
-    const Util::Op::OpData &op_data)
-{
-  return op_data.amnoise_;
-}
-
-//-----------------------------------------------------------------------------
-// Function      : OutputMgrPMNoiseOp::get
-// Purpose       : get value for PM noise spectral density
-// Special Notes :
-// Scope         : public
-// Creator       : Meysam Bahmanian
-// Creation Date : 6/10/2025
-//-----------------------------------------------------------------------------
-complex OutputMgrPMNoiseOp::get(const OutputMgrPMNoiseOp &op, 
-    const Util::Op::OpData &op_data)
-{
-  return op_data.pmnoise_;
-}
-
-//-----------------------------------------------------------------------------
 // Function      : OutputMgrOutputNoiseContOp::get
 // Purpose       : Get either the total noise output contribution for a device,
 //               : or the noise output contribution from a specified noise-type 
@@ -239,6 +211,110 @@ complex OutputMgrInputNoiseContOp::get(const OutputMgrInputNoiseContOp &op,
     {
       // total input output contribution for the device
       result = (*op_data.noiseDataVec_)[op.devIndex_]->totalInputNoise;
+    }
+  }
+
+  return result;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : OutputMgrAMNoiseOp::get
+// Purpose       : get value for AM noise spectral density
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/10/2025
+//-----------------------------------------------------------------------------
+complex OutputMgrAMNoiseOp::get(const OutputMgrAMNoiseOp &op, 
+    const Util::Op::OpData &op_data)
+{
+  return op_data.amnoise_;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : OutputMgrPMNoiseOp::get
+// Purpose       : get value for PM noise spectral density
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/10/2025
+//-----------------------------------------------------------------------------
+complex OutputMgrPMNoiseOp::get(const OutputMgrPMNoiseOp &op, 
+    const Util::Op::OpData &op_data)
+{
+  return op_data.pmnoise_;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : OutputMgrAMNoiseContOp::get
+// Purpose       : Get either the total AM noise contribution for a device,
+//               : or the AM noise contribution from a specified noise-type 
+//               : in the device, at a given frequency
+// Special Notes : The ADMS devices may have duplicate entries for a given 
+//                 noise type.  So, the typeIndex is a vector-of-ints rather
+//                 than a single index.  Only one index should have a non-zero
+//                 contribution though.
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/11/2025
+//-----------------------------------------------------------------------------
+complex OutputMgrAMNoiseContOp::get(const OutputMgrAMNoiseContOp &op, 
+    const Util::Op::OpData &op_data)
+{
+  complex result(0.0, 0.0);
+
+  if (op.devIndex_ != -1 && op_data.amnoiseDataVec_ != 0) 
+  {
+    if (!op.typeIndex_.empty() )
+    {
+      // AM noise contribution from a specified noise-type in the device
+      for (std::vector<int>::const_iterator it=op.typeIndex_.begin(); it!=op.typeIndex_.end() ;it++)
+      { 
+        result += (*op_data.amnoiseDataVec_)[op.devIndex_]->relativeNoiseDens[*it];
+      }
+    }
+    else
+    {
+      // total AM noise contribution for the device
+      result = (*op_data.amnoiseDataVec_)[op.devIndex_]->totalRelativeNoiseDens;
+    }
+  }
+
+  return result;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : OutputMgrPMNoiseContOp::get
+// Purpose       : Get either the total PM noise contribution for a device,
+//               : or the PM noise contribution from a specified noise-type 
+//               : in the device, at a given frequency
+// Special Notes : The ADMS devices may have duplicate entries for a given 
+//                 noise type.  So, the typeIndex is a vector-of-ints rather
+//                 than a single index.  Only one index should have a non-zero
+//                 contribution though.
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/11/2025
+//-----------------------------------------------------------------------------
+complex OutputMgrPMNoiseContOp::get(const OutputMgrPMNoiseContOp &op, 
+    const Util::Op::OpData &op_data)
+{
+  complex result(0.0, 0.0);
+
+  if (op.devIndex_ != -1 && op_data.pmnoiseDataVec_ != 0) 
+  {
+    if (!op.typeIndex_.empty() )
+    {
+      // PM noise contribution from a specified noise-type in the device
+      for (std::vector<int>::const_iterator it=op.typeIndex_.begin(); it!=op.typeIndex_.end() ;it++)
+      { 
+        result += (*op_data.pmnoiseDataVec_)[op.devIndex_]->relativeNoiseDens[*it];
+      }
+    }
+    else
+    {
+      // total PM noise contribution for the device
+      result = (*op_data.pmnoiseDataVec_)[op.devIndex_]->totalRelativeNoiseDens;
     }
   }
 

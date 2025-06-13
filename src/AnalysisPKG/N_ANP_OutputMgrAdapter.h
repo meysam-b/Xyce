@@ -324,7 +324,9 @@ public:
       double totalAMNoiseDens_, 
       double totalPMNoiseDens_, 
       const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI_,
-      const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ_);
+      const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ_,
+      const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI_,
+      const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ_);
 
   void outputEmbeddedSampling(
       bool regressionPCEenable,

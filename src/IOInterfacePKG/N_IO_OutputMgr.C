@@ -3865,7 +3865,9 @@ void OutputMgr::outputHBNoise(
     double                totalAMNoiseDens, 
     double                totalPMNoiseDens, 
     const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
-    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ)
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ)
 {
   outputState_.circuitFrequency_ = frequency;
 
@@ -3877,7 +3879,9 @@ void OutputMgr::outputHBNoise(
     for ( ; it != activeOutputterStack_.back().end(); ++it)
     {
       (*it)->outputHBNoise(comm, frequency, real_solution_vector, imaginary_solution_vector,
-               totalAMNoiseDens, totalPMNoiseDens, noiseDataVecI, noiseDataVecQ);
+               totalAMNoiseDens, totalPMNoiseDens, 
+               noiseDataVecI, noiseDataVecQ,
+               noiseDataVecVecI, noiseDataVecVecQ);
     }
   }
 }

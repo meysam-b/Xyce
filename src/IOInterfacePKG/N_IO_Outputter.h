@@ -390,7 +390,9 @@ public:
     double              totalInPhaseNoiseDens, 
     double              totalQuadratureNoiseDens, 
     const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
-    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ);
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ);
 
   virtual void outputEmbeddedSampling(
     Parallel::Machine comm,
@@ -515,7 +517,9 @@ private:
     double              totalAMNoiseDens, 
     double              totalPMNoiseDens, 
     const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
-    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ) {}
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ) {}
 
   virtual void doOutputEmbeddedSampling(
     Parallel::Machine   comm,

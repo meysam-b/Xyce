@@ -538,13 +538,17 @@ void OutputMgrAdapter::outputHBNoise (
   double totalAMNoiseDens_, 
   double totalPMNoiseDens_, 
   const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI_,
-  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ_)
+  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ_,
+  const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI_,
+  const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ_)
 {
   // measureManager_.updateNoiseMeasures(comm_, frequency, fStart, fStop, &solnVecRealPtr, &solnVecImaginaryPtr,
   //     totalOutputNoiseDens_, totalInputNoiseDens_, &noiseDataVec_);
 
   outputManager_.outputHBNoise(comm_, fOffset, solnVecRealPtr, solnVecImaginaryPtr, 
-      totalAMNoiseDens_, totalPMNoiseDens_, noiseDataVecI_, noiseDataVecQ_);
+      totalAMNoiseDens_, totalPMNoiseDens_, 
+      noiseDataVecI_, noiseDataVecQ_,
+      noiseDataVecVecI_, noiseDataVecVecQ_);
 }
 
 //-----------------------------------------------------------------------------

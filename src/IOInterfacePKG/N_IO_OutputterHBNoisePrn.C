@@ -136,7 +136,13 @@ void HBNoisePrn::doOutputHBNoise(
   double              totalAMNoiseDens, 
   double              totalPMNoiseDens, 
   const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
-  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ)
+  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ,
+  // I have not yet found a proper way to do a detailed noise separation for every noise source for every noise sideband
+  // Noise separation is not just a feature for users, it is extremely helpful for regression testing and debugging.
+  // I think best would be to have .print options to specify noise separation.
+  // So these two vectors are not used in the outputter.
+  const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI,
+  const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ)
 {
   if (Parallel::rank(comm) == 0 && !os_)
   {
@@ -156,9 +162,11 @@ void HBNoisePrn::doOutputHBNoise(
   }
 
   std::vector<complex> result_list;
-  Util::Op::OpData op_data(index_, &real_solution_vector, &imaginary_solution_vector, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, &noiseDataVecI );
+  Util::Op::OpData op_data;
   op_data.amnoise_ = totalAMNoiseDens;
   op_data.pmnoise_ = totalPMNoiseDens;
+  op_data.amnoiseDataVec_ = &noiseDataVecI;
+  op_data.pmnoiseDataVec_ = &noiseDataVecQ;
   getValues(comm, opList_, op_data, result_list);
 
   for (int i = 0; i < result_list.size(); ++i)

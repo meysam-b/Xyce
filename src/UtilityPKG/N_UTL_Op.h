@@ -259,14 +259,13 @@ struct OpData
     const std::vector<Xyce::Analysis::NoiseData*> * noiseDataVec = 0,
     // Meysam Bahmanian
     // 6/10/2025
-    // enabling these lines require changing all of the existing instantiations of OpData using this constructor.
-    // current quick workaround is to set amnoise_ and pmnoise_ to 0.0 in the constructor.
+    // enabling these lines requires changing all of the existing instantiations of OpData using this constructor.
     // double                              amnoise = 0.0,
     // double                              pmnoise = 0.0,
     // const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVec = 0,
     // const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec = 0,
-    // const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVecVec = 0,
-    // const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVecVec = 0,
+    // const std::vector<std::vector<Xyce::Analysis::NoiseData*> > * amnoiseDataVecVec = 0,
+    // const std::vector<std::vector<Xyce::Analysis::NoiseData*> > * pmnoiseDataVecVec = 0,
     const RFparamsData * RFparams = 0
     )
   : currentIndex_(current_index),
@@ -320,8 +319,8 @@ struct OpData
   double                  pmnoise_;
   const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVec_;
   const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec_;
-  const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVecVec_;
-  const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVecVec_;
+  const std::vector<std::vector<Xyce::Analysis::NoiseData*> > * amnoiseDataVecVec_;
+  const std::vector<std::vector<Xyce::Analysis::NoiseData*> > * pmnoiseDataVecVec_;
 
   const RFparamsData * RFparams_;
 };

@@ -220,52 +220,6 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-// Class         : OutputMgrAMNoiseOp
-// Purpose       : Operator for AM noise
-// Special Notes :
-// Creator       : Meysam Bahmanian
-// Creation Date : 6/9/2025
-//-----------------------------------------------------------------------------
-class OutputMgrAMNoiseOp : public Util::Op::Op<OutputMgrAMNoiseOp, Util::Op::ReduceNone, Util::Op::EvalNoop>
-{
-public:
-  OutputMgrAMNoiseOp(const std::string &name, const OutputMgr &output_manager)
-    : Base(name),
-      outputMgr_(output_manager)
-  {}
-
-  virtual ~OutputMgrAMNoiseOp()
-  {}
-
-  static complex get(const OutputMgrAMNoiseOp &op, const Util::Op::OpData &op_data);
-
-  const OutputMgr &   outputMgr_;
-};
-
-//-----------------------------------------------------------------------------
-// Class         : OutputMgrPMNoiseOp
-// Purpose       : Operator for PM noise
-// Special Notes :
-// Creator       : Meysam Bahmanian
-// Creation Date : 6/9/2025
-//-----------------------------------------------------------------------------
-class OutputMgrPMNoiseOp : public Util::Op::Op<OutputMgrPMNoiseOp, Util::Op::ReduceNone, Util::Op::EvalNoop>
-{
-public:
-  OutputMgrPMNoiseOp(const std::string &name, const OutputMgr &output_manager)
-    : Base(name),
-      outputMgr_(output_manager)
-  {}
-
-  virtual ~OutputMgrPMNoiseOp()
-  {}
-
-  static complex get(const OutputMgrPMNoiseOp &op, const Util::Op::OpData &op_data);
-
-  const OutputMgr &   outputMgr_;
-};
-
-//-----------------------------------------------------------------------------
 // Class         : OutputMgrOutputNoiseContOp
 // Purpose       : Operator for individual output noise contributions from
 //               : specific devices
@@ -318,6 +272,108 @@ public:
 
   int                     devIndex_;  // index of the noise source in the noiseDataVec_ of the NOISE object
   const std::vector<int>  typeIndex_; // vector of the indices of the noise type within a given device's vector in the noiseDataVec_
+  const OutputMgr &       outputMgr_;
+};
+
+//-----------------------------------------------------------------------------
+// Class         : OutputMgrAMNoiseOp
+// Purpose       : Operator for AM noise
+// Special Notes :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+class OutputMgrAMNoiseOp : public Util::Op::Op<OutputMgrAMNoiseOp, Util::Op::ReduceNone, Util::Op::EvalNoop>
+{
+public:
+  OutputMgrAMNoiseOp(const std::string &name, const OutputMgr &output_manager)
+    : Base(name),
+      outputMgr_(output_manager)
+  {}
+
+  virtual ~OutputMgrAMNoiseOp()
+  {}
+
+  static complex get(const OutputMgrAMNoiseOp &op, const Util::Op::OpData &op_data);
+
+  const OutputMgr &   outputMgr_;
+};
+
+//-----------------------------------------------------------------------------
+// Class         : OutputMgrPMNoiseOp
+// Purpose       : Operator for PM noise
+// Special Notes :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/9/2025
+//-----------------------------------------------------------------------------
+class OutputMgrPMNoiseOp : public Util::Op::Op<OutputMgrPMNoiseOp, Util::Op::ReduceNone, Util::Op::EvalNoop>
+{
+public:
+  OutputMgrPMNoiseOp(const std::string &name, const OutputMgr &output_manager)
+    : Base(name),
+      outputMgr_(output_manager)
+  {}
+
+  virtual ~OutputMgrPMNoiseOp()
+  {}
+
+  static complex get(const OutputMgrPMNoiseOp &op, const Util::Op::OpData &op_data);
+
+  const OutputMgr &   outputMgr_;
+};
+
+//-----------------------------------------------------------------------------
+// Class         : OutputMgrAMNoiseContOp
+// Purpose       : Operator for individual AM noise contributions from
+//               : specific devices
+// Special Notes :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/11/2025
+//-----------------------------------------------------------------------------
+class OutputMgrAMNoiseContOp : public Util::Op::Op<OutputMgrAMNoiseContOp, Util::Op::ReduceSum, Util::Op::EvalNoop>
+{
+public:
+ OutputMgrAMNoiseContOp(const std::string &name, int devIndex, const std::vector<int> typeIndex, const OutputMgr &output_manager)
+    : Base(name),
+      devIndex_(devIndex),
+      typeIndex_(typeIndex),
+      outputMgr_(output_manager)
+  {}
+
+  virtual ~OutputMgrAMNoiseContOp()
+  {}
+
+  static complex get(const OutputMgrAMNoiseContOp &op, const Util::Op::OpData &op_data);
+
+  const int               devIndex_;  // index of the requested device in the noiseDataVec_ of the NOISE object
+  const std::vector<int>  typeIndex_; // vector of indices of the noise type within a given device's vector in the noiseDataVec_
+  const OutputMgr &       outputMgr_;
+};
+
+//-----------------------------------------------------------------------------
+// Class         : OutputMgrPMNoiseContOp
+// Purpose       : Operator for individual PM noise contributions from
+//               : specific devices
+// Special Notes :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/11/2025
+//-----------------------------------------------------------------------------
+class OutputMgrPMNoiseContOp : public Util::Op::Op<OutputMgrPMNoiseContOp, Util::Op::ReduceSum, Util::Op::EvalNoop>
+{
+public:
+ OutputMgrPMNoiseContOp(const std::string &name, int devIndex, const std::vector<int> typeIndex, const OutputMgr &output_manager)
+    : Base(name),
+      devIndex_(devIndex),
+      typeIndex_(typeIndex),
+      outputMgr_(output_manager)
+  {}
+
+  virtual ~OutputMgrPMNoiseContOp()
+  {}
+
+  static complex get(const OutputMgrPMNoiseContOp &op, const Util::Op::OpData &op_data);
+
+  const int               devIndex_;  // index of the requested device in the noiseDataVec_ of the NOISE object
+  const std::vector<int>  typeIndex_; // vector of indices of the noise type within a given device's vector in the noiseDataVec_
   const OutputMgr &       outputMgr_;
 };
 

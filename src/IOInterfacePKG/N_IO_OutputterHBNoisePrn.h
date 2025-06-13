@@ -80,7 +80,9 @@ public:
     double              totalAMNoiseDens, 
     double              totalPMNoiseDens, 
     const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
-    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ);
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ);
 
 private:
   void hbNoiseHeader(); 
