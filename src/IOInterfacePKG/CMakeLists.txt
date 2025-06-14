@@ -45,6 +45,8 @@ target_sources(XyceLib PRIVATE
       N_IO_OutputterHBFreqTecplot.C
       N_IO_OutputterHBICTecplot.C
       N_IO_OutputterHBNoisePrn.C
+      N_IO_OutputterHBNoiseCSV.C
+      N_IO_OutputterHBNoiseTecplot.C
       N_IO_OutputterHomotopy.C
       N_IO_OutputterHomotopyCSV.C
       N_IO_OutputterHomotopyPrn.C

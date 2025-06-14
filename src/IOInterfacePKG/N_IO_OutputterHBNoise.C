@@ -1,7 +1,6 @@
 //-------------------------------------------------------------------------
-//   Copyright 2002-2025 National Technology & Engineering Solutions of
-//   Sandia, LLC (NTESS).  Under the terms of Contract DE-NA0003525 with
-//   NTESS, the U.S. Government retains certain rights in this software.
+//   Copyright (c) 2025 Meysam Bahmanian
+//   Heinz Nixdorf Institute, University of Paderborn, Germany
 //
 //   This file is part of the Xyce(TM) Parallel Electrical Simulator.
 //
@@ -26,9 +25,9 @@
 //
 // Special Notes  :
 //
-// Creator        : Eric Keiter
+// Creator        : Meysam Bahmanian
 //
-// Creation Date  :
+// Creation Date  : 6/14/2025
 //
 //
 //
@@ -39,10 +38,10 @@
 
 #include <N_ERH_ErrorMgr.h>
 #include <N_IO_OutputMgr.h>
-#include <N_IO_OutputterNoise.h>
+#include <N_IO_OutputterHBNoise.h>
 #include <N_IO_OutputterHBNoisePrn.h>
-#include <N_IO_OutputterNoiseCSV.h>
-#include <N_IO_OutputterNoiseTecplot.h>
+#include <N_IO_OutputterHBNoiseCSV.h>
+#include <N_IO_OutputterHBNoiseTecplot.h>
 
 namespace Xyce {
 namespace IO {
@@ -74,11 +73,11 @@ void enableHBNoiseOutput(Parallel::Machine comm, OutputMgr &output_manager, Anal
       }
       else if (hbnoise_print_parameters.format_ == Format::CSV) 
       {
-        outputter = new Outputter::NoiseCSV(comm, output_manager, hbnoise_print_parameters);
+        outputter = new Outputter::HBNoiseCSV(comm, output_manager, hbnoise_print_parameters);
       }
       else if (hbnoise_print_parameters.format_ == Format::TECPLOT) 
       {
-        outputter = new Outputter::NoiseTecPlot(comm, output_manager, hbnoise_print_parameters);
+        outputter = new Outputter::HBNoiseTecPlot(comm, output_manager, hbnoise_print_parameters);
       }
       else if ( (hbnoise_print_parameters.format_ == Format::RAW) ||
                 (hbnoise_print_parameters.format_ == Format::RAW_ASCII) ||
@@ -113,8 +112,8 @@ void enableHBNoiseOutput(Parallel::Machine comm, OutputMgr &output_manager, Anal
 //-----------------------------------------------------------------------------
 std::ostream &printHBNoiseHeader(std::ostream &os, const PrintParameters &print_parameters)
 {
-  //return printNoiseHeader(os, print_parameters.table_.columnList_, print_parameters.delimiter_);
-//std::ostream &printNoiseHeader(std::ostream &os, const Table::ColumnList &column_list, const std::string &delimiter)
+  //return printHBNoiseHeader(os, print_parameters.table_.columnList_, print_parameters.delimiter_);
+//std::ostream &printHBNoiseHeader(std::ostream &os, const Table::ColumnList &column_list, const std::string &delimiter)
 //{
   const Table::ColumnList &column_list = print_parameters.table_.columnList_;
   const std::string &delimiter = print_parameters.delimiter_;

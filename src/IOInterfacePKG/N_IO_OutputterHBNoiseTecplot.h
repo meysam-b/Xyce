@@ -21,21 +21,21 @@
 
 //-----------------------------------------------------------------------------
 //
-// Purpose        : HBNOISE Prn output
+// Purpose        : HBNOISE Tecplot output
 //
 // Special Notes  : 
 //
 // Creator        : Meysam Bahmanian
 //
-// Creation Date  : 6/9/2025
+// Creation Date  : 6/14/2025
 //
 //
 //
 //
 //-----------------------------------------------------------------------------
 
-#ifndef Xyce_N_IO_OutputterHBNoisePrn_h
-#define Xyce_N_IO_OutputterHBNoisePrn_h
+#ifndef Xyce_N_IO_OutputterHBNoiseTecplot_h
+#define Xyce_N_IO_OutputterHBNoiseTecplot_h
 
 #include <N_IO_OutputterLocal.h>
 
@@ -43,19 +43,16 @@ namespace Xyce {
 namespace IO {
 namespace Outputter {
 
-//-----------------------------------------------------------------------------
-// HBNoise outputters
-
-class HBNoisePrn : public Interface
+class HBNoiseTecPlot : public Interface
 {
 public:
-  HBNoisePrn(Parallel::Machine comm, OutputMgr &output_manager, const PrintParameters &print_parameters);
+  HBNoiseTecPlot(Parallel::Machine comm, OutputMgr &output_manager, const PrintParameters &print_parameters);
 
-  virtual ~HBNoisePrn();
+  virtual ~HBNoiseTecPlot();
 
 private:
-  HBNoisePrn(const HBNoisePrn &);
-  HBNoisePrn &operator=(const HBNoisePrn &);
+  HBNoiseTecPlot(const HBNoiseTecPlot &);
+  HBNoiseTecPlot &operator=(const HBNoiseTecPlot &);
 
 public:
 
@@ -66,7 +63,7 @@ public:
 
   virtual void doFinishOutput();
 
-  virtual void doStartStep(int step, int max_step);
+  virtual void doStartStep(int current_step, int number_of_step);
 
   virtual void doResetIndex();
 
@@ -85,22 +82,17 @@ public:
     const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ);
 
 private:
-  void hbNoiseHeader(); 
+  OutputMgr &           outputManager_;
+  PrintParameters       printParameters_;
+  std::string           outFilename_;
+  std::ostream *        os_;
+  int                   index_;
+  int                   currentStep_;
+  int                   numberOfSteps_;
 
-private:
-  OutputMgr &                   outputManager_;
-  PrintParameters               printParameters_;
-  std::string                   outFilename_;
-  std::ostream *                os_;
-  int                           printCount_;
-  int                           index_;
-  int                           currentStep_;
-  int                           numberOfSteps_;
-
-  std::vector<std::string>      sensParFullNames_;
-  Table::ColumnList             columnList_;
-  Util::Op::OpList              opList_;
+  Util::Op::OpList      opList_;
 };
+
 
 } // namespace Outputter
 } // namespace IO

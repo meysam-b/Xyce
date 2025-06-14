@@ -21,21 +21,21 @@
 
 //-----------------------------------------------------------------------------
 //
-// Purpose        : HBNOISE Prn output
+// Purpose        : Generate HBNoise output in CSV format
 //
-// Special Notes  : 
+// Special Notes  :
 //
 // Creator        : Meysam Bahmanian
 //
-// Creation Date  : 6/9/2025
+// Creation Date  : 6/14/2025
 //
 //
 //
 //
 //-----------------------------------------------------------------------------
 
-#ifndef Xyce_N_IO_OutputterHBNoisePrn_h
-#define Xyce_N_IO_OutputterHBNoisePrn_h
+#ifndef Xyce_N_IO_OutputterHBNoiseCSV_h
+#define Xyce_N_IO_OutputterHBNoiseCSV_h
 
 #include <N_IO_OutputterLocal.h>
 
@@ -46,16 +46,16 @@ namespace Outputter {
 //-----------------------------------------------------------------------------
 // HBNoise outputters
 
-class HBNoisePrn : public Interface
+class HBNoiseCSV : public Interface
 {
 public:
-  HBNoisePrn(Parallel::Machine comm, OutputMgr &output_manager, const PrintParameters &print_parameters);
+  HBNoiseCSV(Parallel::Machine comm, OutputMgr &output_manager, const PrintParameters &print_parameters);
 
-  virtual ~HBNoisePrn();
+  virtual ~HBNoiseCSV();
 
 private:
-  HBNoisePrn(const HBNoisePrn &);
-  HBNoisePrn &operator=(const HBNoisePrn &);
+  HBNoiseCSV(const HBNoiseCSV &);
+  HBNoiseCSV &operator=(const HBNoiseCSV &);
 
 public:
 
@@ -106,4 +106,4 @@ private:
 } // namespace IO
 } // namespace Xyce
 
-#endif // Xyce_N_IO_OutputterHBNoisePrn_h
+#endif // Xyce_N_IO_OutputterHBNoiseCSV_h

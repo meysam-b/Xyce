@@ -21,7 +21,7 @@
 
 //-----------------------------------------------------------------------------
 //
-// Purpose        :
+// Purpose        : HBNOISE output
 //
 // Special Notes  :
 //
@@ -34,8 +34,8 @@
 //
 //-----------------------------------------------------------------------------
 
-#ifndef Xyce_N_IO_OutputterHBNOISE_h
-#define Xyce_N_IO_OutputterHBNOISE_h
+#ifndef Xyce_N_IO_OutputterHBNoise_h
+#define Xyce_N_IO_OutputterHBNoise_h
 
 #include <N_IO_OutputterLocal.h>
 
@@ -53,4 +53,4 @@ std::ostream &printHBNoiseHeader(std::ostream &os, const PrintParameters &print_
 } // namespace IO
 } // namespace Xyce
 
-#endif // Xyce_N_IO_OutputterHBNOISE_h
+#endif // Xyce_N_IO_OutputterHBNoise_h
