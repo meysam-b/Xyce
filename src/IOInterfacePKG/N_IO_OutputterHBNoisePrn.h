@@ -87,6 +87,40 @@ public:
 private:
   void hbNoiseHeader(); 
 
+//-----------------------------------------------------------------------------
+// Purpose        : Debug Mode Functions & variables
+// Special Notes  : These functions and variables should be removed after the 
+//                  parsing library is updated to support detailed noise 
+//                  separation for every noise source for every noise sideband
+// Creator        : Meysam Bahmanian
+// Creation Date  : 6/14/2025
+//-----------------------------------------------------------------------------
+private:
+  void doOutputHBNoiseDebug(
+    Parallel::Machine   comm,
+    double              frequency,
+    const Linear::Vector &real_solution_vector, 
+    const Linear::Vector &imaginary_solution_vector,
+    double              totalAMNoiseDens, 
+    double              totalPMNoiseDens, 
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
+    const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI,
+    const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ);
+
+  std::ostream & printHeaderDebug(
+    std::ostream &os, 
+    const Table::ColumnList &column_list, 
+    const std::string &delimiter);
+
+  std::vector<std::string> columnListDebug_;
+  std::ostream * osDebug_;
+  std::string outFilenameDebug_;
+  int numHarms_;
+// End of Debug Mode Functions & variables
+//-----------------------------------------------------------------------------
+
+
 private:
   OutputMgr &                   outputManager_;
   PrintParameters               printParameters_;

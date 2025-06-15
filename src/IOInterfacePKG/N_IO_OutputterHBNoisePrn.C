@@ -41,6 +41,10 @@
 #include <N_IO_Op.h>
 #include <N_UTL_DeleteList.h>
 
+// Header for Debug Mode
+#include <N_UTL_FeatureTest.h>
+// End of Header for Debug Mode
+
 namespace Xyce {
 namespace IO {
 namespace Outputter {
@@ -163,6 +167,7 @@ void HBNoisePrn::doOutputHBNoise(
 
   std::vector<complex> result_list;
   Util::Op::OpData op_data;
+  op_data.currentIndex_ = index_;
   op_data.amnoise_ = totalAMNoiseDens;
   op_data.pmnoise_ = totalPMNoiseDens;
   op_data.amnoiseDataVec_ = &noiseDataVecI;
@@ -181,6 +186,157 @@ void HBNoisePrn::doOutputHBNoise(
     *os_ << std::endl;
 
   ++index_;
+
+  // Debug Mode
+  // TODO: Remove this after the parsing library is updated to support detailed noise separation for every noise source for every noise sideband
+  if (DEBUG_HBNOISE)
+  {
+    doOutputHBNoiseDebug(comm, frequency, 
+                        real_solution_vector, imaginary_solution_vector, 
+                        totalAMNoiseDens, totalPMNoiseDens, 
+                        noiseDataVecI, noiseDataVecQ, 
+                        noiseDataVecVecI, noiseDataVecVecQ);
+  }
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNoisePrn::doOutputHBNoiseDebug
+// Purpose       : Debug Mode Output
+// Special Notes : This function should be removed after the parsing library 
+//                  is updated to support detailed noise separation for every 
+//                  noise source for every noise sideband
+// Scope         :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/14/2025
+//-----------------------------------------------------------------------------
+void HBNoisePrn::doOutputHBNoiseDebug(
+  Parallel::Machine   comm,
+  double              frequency,
+  const Linear::Vector &real_solution_vector, 
+  const Linear::Vector &imaginary_solution_vector,
+  double              totalAMNoiseDens, 
+  double              totalPMNoiseDens, 
+  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecI,
+  const std::vector<Xyce::Analysis::NoiseData*> & noiseDataVecQ,
+  const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecI,
+  const std::vector<std::vector<Xyce::Analysis::NoiseData*> > & noiseDataVecVecQ)
+{
+  // two sidebands per harmonic; dc has no sideband
+  numHarms_ = (noiseDataVecVecI.size() - 1)/2;
+
+  if (Parallel::rank(comm) == 0 && !osDebug_)
+  {
+    outFilenameDebug_ = outputFilename(printParameters_.filename_, 
+                                  ".HBNOISE_DEBUG.Prn",
+                                  printParameters_.suffix_+outputManager_.getFilenameSuffix(), 
+                                  outputManager_.getNetlistFilename(),
+                                  printParameters_.overrideRawFilename_,
+                                  printParameters_.formatSupportsOverrideRaw_,
+                                  printParameters_.dashoFilename_,
+                                  printParameters_.fallback_);
+    osDebug_ = outputManager_.openFile(outFilenameDebug_);
+    if (outputManager_.getPrintHeader())
+    {
+      printHeaderDebug(*osDebug_, printParameters_.table_.columnList_, printParameters_.delimiter_);
+    }
+  }
+
+  std::vector<complex> result_list;
+  Util::Op::OpData op_data;
+  op_data.currentIndex_ = index_;
+  op_data.amnoise_ = totalAMNoiseDens;
+  op_data.pmnoise_ = totalPMNoiseDens;
+  op_data.amnoiseDataVec_ = &noiseDataVecI;
+  op_data.pmnoiseDataVec_ = &noiseDataVecQ;
+  getValues(comm, opList_, op_data, result_list);
+
+  for (int harm = 0; harm <= numHarms_; ++harm)
+  { // harmonic loop
+    std::vector<complex> result_list;
+    Util::Op::OpData op_data;
+    op_data.currentIndex_ = index_;
+    if (harm == 0) 
+    { // get data for the first harmonic (this is the baseband  component)
+      op_data.amnoiseDataVec_ = &noiseDataVecVecI[0];
+      op_data.pmnoiseDataVec_ = &noiseDataVecVecQ[0];
+    } else
+    { // get data for LSB sideband; this is sufficient for debugging
+      op_data.amnoiseDataVec_ = &noiseDataVecVecI[2*harm-1];
+      op_data.pmnoiseDataVec_ = &noiseDataVecVecQ[2*harm-1];
+    }
+    getValues(comm, opList_, op_data, result_list);
+    if (harm == 0) 
+    { // print all parameters for the first harmonic (this prints index and frequency)
+      for (int i = 0; i < result_list.size(); ++i)
+      {
+        if (printParameters_.table_.columnList_[i].name_ == "AMNOISE" || 
+            printParameters_.table_.columnList_[i].name_ == "PMNOISE")
+          continue;
+
+        result_list[i] = complex(filter(result_list[i].real(), printParameters_.filter_), 0.0);
+        if (osDebug_) {
+          printValue(*osDebug_, printParameters_.table_.columnList_[i], printParameters_.delimiter_, i, result_list[i].real());
+        }
+      }
+    } else 
+    { // exclude index and frequency from the output; I have also excluded these from the header
+      for (int i = 0; i < result_list.size(); ++i)
+      {
+        if (printParameters_.table_.columnList_[i].name_ == "AMNOISE" || 
+            printParameters_.table_.columnList_[i].name_ == "PMNOISE" ||
+            printParameters_.table_.columnList_[i].name_ == "INDEX" ||
+            printParameters_.table_.columnList_[i].name_ == "FREQ")
+          continue;
+        result_list[i] = complex(filter(result_list[i].real(), printParameters_.filter_), 0.0);
+        if (osDebug_) {
+          printValue(*osDebug_, printParameters_.table_.columnList_[i], printParameters_.delimiter_, i, result_list[i].real());
+        }
+      }
+    }
+  } // end of harmonic loop
+
+  if (osDebug_)
+    *osDebug_ << std::endl;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HBNoisePrn::doOutputHBNoiseDebug
+// Purpose       : Debug Mode Output
+// Special Notes : This function should be removed after the parsing library 
+//                  is updated to support detailed noise separation for every 
+//                  noise source for every noise sideband
+// Scope         :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/14/2025
+//-----------------------------------------------------------------------------
+std::ostream & HBNoisePrn::printHeaderDebug(std::ostream &os, const Table::ColumnList &column_list, const std::string &delimiter)
+{
+
+  for (Table::ColumnList::const_iterator it = column_list.begin(); it != column_list.end(); ++it)
+  {
+    if (it != column_list.begin())
+      os << (delimiter.empty() ? " " : delimiter);
+
+    if ( it->name_ == "INDEX" || it->name_ == "FREQ" )
+      printHeader(os, (*it));
+  }
+
+  for (int harm = 0; harm <= numHarms_; ++harm)
+  {
+    for (Table::ColumnList::const_iterator it = column_list.begin(); it != column_list.end(); ++it)
+    {
+      if ( it->name_ == "INDEX" || it->name_ == "FREQ" || it->name_ == "AMNOISE" || it->name_ == "PMNOISE")
+        continue;
+      Table::Column column = *it;
+      column.name_ += "_H" + std::to_string(harm);
+
+      printHeader(os, column);
+    }
+  }
+
+  os << std::endl;
+
+  return os;
 }
 
 //-----------------------------------------------------------------------------
