@@ -120,7 +120,12 @@ private:
   void processOutputNodes ();
   
   void clearNoiseIntegrals_();
-  inline void evalDeviceNoiseDensities(Xyce::Analysis::NoiseData& noiseData, Linear::Vector& XIreal, Linear::Vector& XIimag);
+  inline void evalDeviceNoiseDensities(
+    bool isBaseband,
+    Xyce::Analysis::NoiseData& noiseData, 
+    Linear::Vector& XIreal, 
+    Linear::Vector& XIimag,
+    double& totalRelativeNoiseDens);
 
 private:
   AnalysisManager &                     analysisManager_;

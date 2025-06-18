@@ -132,7 +132,6 @@ HB::HB(
     saveIcData_(false),
     useStartupICs_(false),
     taHB_(1),
-    hbNoise_(false),
     hbOsc_(false),
     refID_(-1),
     refNode_(""),
@@ -681,6 +680,91 @@ bool HB::doLoopProcess()
   }
 
   return returnValue;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HB::getFreqs()
+// Purpose       : This methods returns the frequency vector, which is used 
+//                 in HBNOISE analysis to set the frequency of the HB analysis.
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/16/2025
+//-----------------------------------------------------------------------------
+const std::vector<double> &HB::getFreqs() const
+{
+  return freqs_;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HB::getSize()
+// Purpose       : This methods returns the size of the HB analysis, which is used 
+//                 in HBNOISE analysis to set the size of the HB analysis.
+//                 size_ is the number of time points in the HB analysis.
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/16/2025
+//-----------------------------------------------------------------------------
+int HB::getSize() const
+{
+  return size_;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HB::getBuilder()
+// Purpose       : This methods returns the builder of the HB analysis, which is used 
+//                 in HBNOISE analysis to set the builder of the HB analysis.
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/16/2025
+//-----------------------------------------------------------------------------
+Linear::Builder &HB::getBuilder() const
+{
+  return builder_;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HB::getHBBuilderPtr()
+// Purpose       : This methods returns the HB builder pointer of the HB analysis, which is used 
+//                 in HBNOISE analysis to set the HB builder pointer of the HB analysis.
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/16/2025
+//-----------------------------------------------------------------------------
+Teuchos::RCP<Linear::HBBuilder> HB::getHBBuilderPtr() const
+{
+  return hbBuilderPtr_;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HB::getHBLoaderPtr()
+// Purpose       : This methods returns the HB loader pointer of the HB analysis, which is used 
+//                 in HBNOISE analysis to set the HB loader pointer of the HB analysis.
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/16/2025
+//-----------------------------------------------------------------------------
+Loader::HBLoader * HB::getHBLoaderPtr() const
+{
+  return hbLoaderPtr_;
+}
+
+//-----------------------------------------------------------------------------
+// Function      : HB::getFastTimes()
+// Purpose       : This methods returns the fast times of the HB analysis, which is used 
+//                 in HBNOISE analysis to set the fast times of the HB analysis.
+// Special Notes :
+// Scope         : public
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/16/2025
+//-----------------------------------------------------------------------------
+const std::vector<double> & HB::getFastTimes() const
+{
+  return fastTimes_;
 }
 
 //-----------------------------------------------------------------------------

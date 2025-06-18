@@ -67,7 +67,7 @@ namespace Analysis {
 //-------------------------------------------------------------------------
 class HB : public AnalysisBase, public Util::ListenerAutoSubscribe<StepEvent>
 {
-  friend class HBNOISE;
+  // friend class HBNOISE;:
 
 public:
   HB(
@@ -124,6 +124,22 @@ public:
   { return useStartupICs_ ; }
 
   void finalExpressionBasedSetup();
+
+  // HBNOISE related methods
+  // Added by Meysam Bahmanian
+  // 6/16/2025
+  // These methods are used to get the frequency, size, period, and times from the HB analysis
+  const std::vector<double> & getFreqs() const;
+  int getSize() const;
+  const std::vector<double> & getFastTimes() const;
+  Linear::Builder & getBuilder() const;
+  Teuchos::RCP<Linear::HBBuilder> getHBBuilderPtr() const;
+  Loader::HBLoader * getHBLoaderPtr() const;
+
+  // Linear::Builder &                     builder_;
+  // Teuchos::RCP<Linear::HBBuilder>       hbBuilderPtr_;
+  // Loader::HBLoader *                    hbLoaderPtr_; /// HB loader, builder, system, and DFT
+  // End of HBNOISE related methods
 
 protected:
   bool doRun(); 
@@ -228,8 +244,6 @@ private:
 
   double                period_;                /// Periodicity Information
   double                relErrorTol_;
-
-  bool                  hbNoise_;      // used to load dae matrices
 
   // Number of fast time periods to integrate over and IGNORE before
   // getting initial conditions for HB.  Default is zero.

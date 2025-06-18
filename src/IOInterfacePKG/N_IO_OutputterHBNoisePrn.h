@@ -113,7 +113,6 @@ private:
     const Table::ColumnList &column_list, 
     const std::string &delimiter);
 
-  std::vector<std::string> columnListDebug_;
   std::ostream * osDebug_;
   std::string outFilenameDebug_;
   int numHarms_;

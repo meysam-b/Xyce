@@ -61,13 +61,16 @@ HBNoisePrn::HBNoisePrn(Parallel::Machine comm, OutputMgr &output_manager, const 
   : outputManager_(output_manager),
     printParameters_(print_parameters),
     outFilename_(),
+    outFilenameDebug_(),
+    numHarms_(0),
     os_(0),
+    osDebug_(0),
     index_(0),
     currentStep_(0),
     numberOfSteps_(0)
 {
   if (printParameters_.defaultExtension_.empty())
-    printParameters_.defaultExtension_ = "NOISE.prn";
+    printParameters_.defaultExtension_ = "HBNOISE.prn";
 
   fixupColumns(comm, outputManager_.getOpBuilderManager(), printParameters_, opList_);
 }
@@ -241,55 +244,77 @@ void HBNoisePrn::doOutputHBNoiseDebug(
     }
   }
 
-  std::vector<complex> result_list;
-  Util::Op::OpData op_data;
-  op_data.currentIndex_ = index_;
-  op_data.amnoise_ = totalAMNoiseDens;
-  op_data.pmnoise_ = totalPMNoiseDens;
-  op_data.amnoiseDataVec_ = &noiseDataVecI;
-  op_data.pmnoiseDataVec_ = &noiseDataVecQ;
-  getValues(comm, opList_, op_data, result_list);
+  // std::vector<complex> result_list;
+  // Util::Op::OpData op_data;
+  // op_data.currentIndex_ = index_;
+  // op_data.amnoise_ = totalAMNoiseDens;
+  // op_data.pmnoise_ = totalPMNoiseDens;
+  // op_data.amnoiseDataVec_ = &noiseDataVecI;
+  // op_data.pmnoiseDataVec_ = &noiseDataVecQ;
+  // getValues(comm, opList_, op_data, result_list);
 
   for (int harm = 0; harm <= numHarms_; ++harm)
   { // harmonic loop
-    std::vector<complex> result_list;
-    Util::Op::OpData op_data;
-    op_data.currentIndex_ = index_;
     if (harm == 0) 
     { // get data for the first harmonic (this is the baseband  component)
+      std::vector<complex> result_list;
+      Util::Op::OpData op_data;
+      op_data.currentIndex_ = index_;
       op_data.amnoiseDataVec_ = &noiseDataVecVecI[0];
       op_data.pmnoiseDataVec_ = &noiseDataVecVecQ[0];
-    } else
-    { // get data for LSB sideband; this is sufficient for debugging
-      op_data.amnoiseDataVec_ = &noiseDataVecVecI[2*harm-1];
-      op_data.pmnoiseDataVec_ = &noiseDataVecVecQ[2*harm-1];
-    }
-    getValues(comm, opList_, op_data, result_list);
-    if (harm == 0) 
-    { // print all parameters for the first harmonic (this prints index and frequency)
+      getValues(comm, opList_, op_data, result_list);
+      // print all parameters for the first harmonic (this prints index and frequency)
       for (int i = 0; i < result_list.size(); ++i)
       {
-        if (printParameters_.table_.columnList_[i].name_ == "AMNOISE" || 
-            printParameters_.table_.columnList_[i].name_ == "PMNOISE")
-          continue;
-
-        result_list[i] = complex(filter(result_list[i].real(), printParameters_.filter_), 0.0);
-        if (osDebug_) {
-          printValue(*osDebug_, printParameters_.table_.columnList_[i], printParameters_.delimiter_, i, result_list[i].real());
+        const std::string& columnName = printParameters_.table_.columnList_[i].name_;
+        if (!(columnName == "AMNOISE" || columnName == "PMNOISE")) 
+        {
+          result_list[i] = complex(filter(result_list[i].real(), printParameters_.filter_), 0.0);
+          if (osDebug_) {
+            printValue(*osDebug_, printParameters_.table_.columnList_[i], printParameters_.delimiter_, i, result_list[i].real());
+          }
         }
       }
-    } else 
-    { // exclude index and frequency from the output; I have also excluded these from the header
-      for (int i = 0; i < result_list.size(); ++i)
+    } else
+    { 
+      std::vector<complex> result_list_lsb;
+      std::vector<complex> result_list_usb;
+      Util::Op::OpData op_data_lsb;
+      Util::Op::OpData op_data_usb;
+      op_data_lsb.currentIndex_ = index_;
+      op_data_usb.currentIndex_ = index_;
+
+      op_data_lsb.amnoiseDataVec_ = &noiseDataVecVecI[2*harm-1];
+      op_data_lsb.pmnoiseDataVec_ = &noiseDataVecVecQ[2*harm-1];
+
+      op_data_usb.amnoiseDataVec_ = &noiseDataVecVecI[2*harm];
+      op_data_usb.pmnoiseDataVec_ = &noiseDataVecVecQ[2*harm];
+
+      getValues(comm, opList_, op_data_lsb, result_list_lsb);
+      getValues(comm, opList_, op_data_usb, result_list_usb);
+
+      for (int i = 0; i < result_list_lsb.size(); ++i)
       {
         if (printParameters_.table_.columnList_[i].name_ == "AMNOISE" || 
             printParameters_.table_.columnList_[i].name_ == "PMNOISE" ||
             printParameters_.table_.columnList_[i].name_ == "INDEX" ||
             printParameters_.table_.columnList_[i].name_ == "FREQ")
           continue;
-        result_list[i] = complex(filter(result_list[i].real(), printParameters_.filter_), 0.0);
+        result_list_lsb[i] = complex(filter(result_list_lsb[i].real(), printParameters_.filter_), 0.0);
         if (osDebug_) {
-          printValue(*osDebug_, printParameters_.table_.columnList_[i], printParameters_.delimiter_, i, result_list[i].real());
+          printValue(*osDebug_, printParameters_.table_.columnList_[i], printParameters_.delimiter_, i, result_list_lsb[i].real());
+        }
+      }
+      for (int i = 0; i < result_list_usb.size(); ++i)
+      {
+        if (printParameters_.table_.columnList_[i].name_ == "AMNOISE" || 
+            printParameters_.table_.columnList_[i].name_ == "PMNOISE" ||
+            printParameters_.table_.columnList_[i].name_ == "INDEX" ||
+            printParameters_.table_.columnList_[i].name_ == "FREQ")
+          continue;
+        result_list_usb[i] = complex(filter(result_list_usb[i].real(), printParameters_.filter_), 0.0);
+        if (osDebug_) {
+          printValue(*osDebug_, printParameters_.table_.columnList_[i], printParameters_.delimiter_, i, result_list_usb[i].real());
         }
       }
     }
@@ -321,19 +346,38 @@ std::ostream & HBNoisePrn::printHeaderDebug(std::ostream &os, const Table::Colum
       printHeader(os, (*it));
   }
 
+  // H is harmonic number prefix, L is LSB, U is USB
   for (int harm = 0; harm <= numHarms_; ++harm)
   {
-    for (Table::ColumnList::const_iterator it = column_list.begin(); it != column_list.end(); ++it)
+    if (harm == 0) 
     {
-      if ( it->name_ == "INDEX" || it->name_ == "FREQ" || it->name_ == "AMNOISE" || it->name_ == "PMNOISE")
-        continue;
-      Table::Column column = *it;
-      column.name_ += "_H" + std::to_string(harm);
-
-      printHeader(os, column);
+      for (Table::ColumnList::const_iterator it = column_list.begin(); it != column_list.end(); ++it)
+      {
+        if ( it->name_ == "INDEX" || it->name_ == "FREQ" || it->name_ == "AMNOISE" || it->name_ == "PMNOISE")
+          continue;
+        Table::Column column = *it;
+        column.name_ += "_H" + std::to_string(harm);
+        printHeader(os, column);
+      }
+    } else {
+      for (Table::ColumnList::const_iterator it = column_list.begin(); it != column_list.end(); ++it)
+      {
+        if ( it->name_ == "INDEX" || it->name_ == "FREQ" || it->name_ == "AMNOISE" || it->name_ == "PMNOISE")
+          continue;
+        Table::Column column = *it;
+        column.name_ += "_H" + std::to_string(harm) + "_L";
+        printHeader(os, column);
+      }
+      for (Table::ColumnList::const_iterator it = column_list.begin(); it != column_list.end(); ++it)
+      {
+        if ( it->name_ == "INDEX" || it->name_ == "FREQ" || it->name_ == "AMNOISE" || it->name_ == "PMNOISE")
+          continue;
+        Table::Column column = *it;
+        column.name_ += "_H" + std::to_string(harm) + "_U";
+        printHeader(os, column);
+      }
     }
   }
-
   os << std::endl;
 
   return os;

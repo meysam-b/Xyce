@@ -1340,9 +1340,9 @@ bool NOISE::solveAdjointNOISE_()
 
   if (DEBUG_ANALYSIS)
   {
-    std::cout << "Xreal: ------------------------------------"<<std::endl;
+    Xyce::dout() << "Xreal: ------------------------------------" <<std::endl;
     Xreal.print( Xyce::dout() );
-    std::cout << "Ximag: ------------------------------------"<<std::endl;
+    Xyce::dout() << "Ximag: ------------------------------------" <<std::endl;
     Ximag.print( Xyce::dout() );
   }
 

@@ -375,16 +375,15 @@ bool HBNOISE::doInit()
     Report::UserError0() << "HBNOISE analysis requires an HB analysis to be defined first";
     return false;
   }
-  hbAnalysis_->hbNoise_ = true;
   // check if the HB analysis has a single frequency
-  std::vector<double> freqs = hbAnalysis_->freqs_;
+  std::vector<double> freqs = hbAnalysis_->getFreqs();
   if (freqs.size() > 1)
   {
     Report::UserError0() << "HBNOISE analysis requires a single frequency to be specified";
     return false;
   }
   // get the frequency from the HB analysis
-  size_ = hbAnalysis_->size_;
+  size_ = hbAnalysis_->getSize();
   numHarms_ = (size_-1)/2;
   freq_ = freqs[0];
   omega_ = 2.0*M_PI*freq_;
@@ -510,21 +509,24 @@ bool HBNOISE::doLoopProcess()
   // analysisManager_.pushActiveAnalysis(hbAnalysis_);
   bsuccess = hbAnalysis_->run();
   analysisManager_.pushActiveAnalysis(this);
-  // add if fails ...
-
-  // save the mag & phase of solution for AM/PM noise calculations
-  
+  if (!bsuccess)
+  {
+    return false;
+  }
 
   // some of these pointers are set after HB::run(), so I have to copy them at this point.
-  hbBuilderPtr_ = hbAnalysis_->hbBuilderPtr_;
-  builderPtr_ = &(hbAnalysis_->builder_);
-  hbLoaderPtr_ = hbAnalysis_->hbLoaderPtr_;
+  // hbBuilderPtr_ = hbAnalysis_->hbBuilderPtr_;
+  // builderPtr_ = &(hbAnalysis_->builder_);
+  // hbLoaderPtr_ = hbAnalysis_->hbLoaderPtr_;
+  hbBuilderPtr_ = hbAnalysis_->getHBBuilderPtr();
+  builderPtr_ = &(hbAnalysis_->getBuilder());
+  hbLoaderPtr_ = hbAnalysis_->getHBLoaderPtr();
 
   updateLinearTimeVariantSystem_C_and_G_();
   createHarmonicSpaceLinearSystem_();
 
   // static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
-  //   (AnalysisEvent(AnalysisEvent::INITIALIZE, AnalysisEvent::NOISE));
+  //   (AnalysisEvent(AnalysisEvent::INITIALIZE, AnalysisEvent::HBNOISE));
 
   clearNoiseIntegrals_();
 
@@ -536,10 +538,9 @@ bool HBNOISE::doLoopProcess()
 
   // ///////////////////////////////////////////////////////////////////////////
   // // frequency loop
-  // // loop over all the specified frequencies, do an AC solve and a NOISE solve at each.
+  // // loop over all the specified offset frequencies
   for (int currentStep = 0; currentStep < hbnoiseLoopSize_; ++currentStep)
   {
-  //   // solve the AC system, to get up-to-date currents and voltages
     if (dataSpecification_)
     {
       updateDataParams_(currentStep);
@@ -549,142 +550,25 @@ bool HBNOISE::doLoopProcess()
       updateCurrentFreq_(currentStep);
     }
 
+    if (currentFreq_ > 0.5*freq_)
+    {
+      Report::UserError0() << "HBNOISE analysis requires an offset frequency less than half of the carrier frequency";
+      return false;
+    }
+
   //   static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
   //     (AnalysisEvent(AnalysisEvent::STEP_STARTED, AnalysisEvent::NOISE, currentFreq_, currentStep));
-
-  //   updateACLinearSystem_C_and_G_();
-  //   updateACLinearSystemFreq_();
     updateHarmonicSpaceFreq_();
-  //   updateACLinearSystemMagAndPhase_();
-
-  //   bool stepAttemptStatus;
-  //   {
-  //     Stats::StatTop _ACsolveStat("AC Linear Solve");
-  //     Stats::TimeBlock _AC_Timer(_ACsolveStat);
-
-  //     stepAttemptStatus = solveACLinearSystem_();
-  //   }
-
-  //   // save a copy of X_ (the AC solution, already computed), for output purposes, etc.
-  //   *saved_AC_X_ = *X_;
-
-  //   // Compute AC gain.
-  //   Linear::Vector & Xreal = X_->block( 0 );
-  //   Linear::Vector & Ximag = X_->block( 1 );
-
-  //   double v1r = 0.0;
-  //   double v1i = 0.0;
-  //   double v2r = 0.0;
-  //   double v2i = 0.0;
-
-  //   //comm.barrier();
-  //   int root=-1;
-  //   if (outputVarGIDs_.size()>0)
-  //   {
-  //     if (outputVarGIDs_[0] > -1)
-  //     {
-  //       v1r = Xreal.getElementByGlobalIndex(outputVarGIDs_[0]);
-  //       v1i = Ximag.getElementByGlobalIndex(outputVarGIDs_[0]);
-  //       root = myPID;
-  //     }
-  //     Xyce::Parallel::AllReduce(comm.comm(), MPI_MAX, &root, 1);
-  //     comm.bcast( &v1r, 1, root );
-  //     comm.bcast( &v1i, 1, root );
-  //   }
-
-  //   root=-1;
-  //   if (outputVarGIDs_.size()>1)
-  //   {
-  //     if (outputVarGIDs_[1] > -1)
-  //     {
-  //       v2r = Xreal.getElementByGlobalIndex(outputVarGIDs_[1]);
-  //       v2i = Ximag.getElementByGlobalIndex(outputVarGIDs_[1]);
-  //       root = myPID;
-  //     }
-  //     Xyce::Parallel::AllReduce(comm.comm(), MPI_MAX, &root, 1);
-  //     comm.bcast( &v2r, 1, root );
-  //     comm.bcast( &v2i, 1, root );
-  //   }
-
-  //   double realVal = v1r-v2r;
-  //   double imagVal = v1i-v2i;
-  //   GainSqInv_ = 1.0 / std::max(((realVal*realVal) + (imagVal*imagVal)),N_MINGAIN);
-  //   lnGainInv_ = std::log(GainSqInv_);
-
-  //   // save previous (last) lnNoise densities
-  //   for (int i=0;i<noiseDataVec_.size();++i)
-  //   {
-  //     int numNoiseThisDevice = noiseDataVec_[i]->numSources;
-  //     for (int j=0;j<numNoiseThisDevice;++j)
-  //     {
-  //       noiseDataVec_[i]->lastLnNoiseDens[j] = noiseDataVec_[i]->lnNoiseDens[j];
-  //     }
-  //   }
 
     // do NOISE analysis for this frequency.
     resetAdjointHBNOISELinearSystem_();
     solveAdjointHBNOISE_();
 
-  //   // Perform total noise integrals, if the specified frequency values are
-  //   // monotonically increasing.  This is always true if DATA=<name> is NOT
-  //   // used on the .NOISE line.
-  //   if (currentStep != 0 && calcNoiseIntegrals_)
-  //   {
-  //     for (int i=0;i<noiseDataVec_.size();++i)
-  //     {
-  //       int numNoiseThisDevice = noiseDataVec_[i]->numSources;
-  //       for (int j=0;j<numNoiseThisDevice;++j)
-  //       {
-  //         double noizDens = noiseDataVec_[i]->outputNoiseDens[j];
-  //         double lnDens = noiseDataVec_[i]->lnNoiseDens[j];
-  //         double lnlastDens = noiseDataVec_[i]->lastLnNoiseDens[j];
+    static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
+      (AnalysisEvent(AnalysisEvent::STEP_SUCCESSFUL, AnalysisEvent::HBNOISE, currentFreq_, currentStep));
+    doProcessSuccessfulStep();
 
-  //         double tempOutNoise = noiseIntegral( noizDens, lnDens, lnlastDens,
-  //                delLnFreq_, delFreq_, lnFreq_, lnLastFreq_);
-
-  //         double tempInNoise = noiseIntegral(
-  //                noizDens * GainSqInv_,
-  //                lnDens + lnGainInv_,
-  //                lnlastDens + lnGainInv_,
-  //                delLnFreq_, delFreq_, lnFreq_, lnLastFreq_);
-
-
-  //         noiseDataVec_[i]->outputNoiseTotal[j] += tempOutNoise;
-  //         noiseDataVec_[i]->inputNoiseTotal[j] += tempInNoise;
-
-  //         totalOutputNoise_+=tempOutNoise;
-  //         totalInputNoise_+=tempInNoise;
-  //       }
-  //     }
-  //   }
-
-  //   // process success/failure
-  //   if (stepAttemptStatus)
-  //   {
-  //     static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
-  //       (AnalysisEvent(AnalysisEvent::STEP_SUCCESSFUL, AnalysisEvent::NOISE, currentFreq_, currentStep));
-  //     doProcessSuccessfulStep();
-  //   }
-  //   else // stepAttemptStatus  (ie do this if the step FAILED)
-  //   {
-  //     static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
-  //       (AnalysisEvent(AnalysisEvent::STEP_FAILED, AnalysisEvent::NOISE, currentFreq_, currentStep));
-  //     doProcessFailedStep();
-  //   }
-      doProcessSuccessfulStep();
   }
-
-  // Xyce::Parallel::AllReduce(comm.comm(), MPI_SUM, &totalOutputNoise_, 1);
-  // Xyce::Parallel::AllReduce(comm.comm(), MPI_SUM, &totalInputNoise_, 1);
-
-  // if (calcNoiseIntegrals_)
-  // {
-  //   // Outputs to the screen
-  //   noiseOutputToScreen_( Xyce::lout() );
-  // }
-
-  // static_cast<Xyce::Util::Notifier<AnalysisEvent> &>(analysisManager_).publish
-  //   (AnalysisEvent(AnalysisEvent::FINISH, AnalysisEvent::NOISE));
 
   return true;
 }
@@ -1117,7 +1001,8 @@ void HBNOISE::prepareHBNOISEOutputVectors_(
   { // select a noise device
     for (int k = 0; k < 2*numHarms+1; ++k) 
     { // sweeping over noise harmonics
-      evalDeviceNoiseDensities(*(noiseDataVecVec[k][i]), *(outputVectors[2*k]), *(outputVectors[2*k+1]));
+      bool isBaseband = (k == 0);
+      evalDeviceNoiseDensities(isBaseband, *(noiseDataVecVec[k][i]), *(outputVectors[2*k]), *(outputVectors[2*k+1]), totalRelativeNoiseDens);
     }
   }
 
@@ -1163,9 +1048,11 @@ void HBNOISE::prepareHBNOISEOutputVectors_(
 // Creation Date : 6/7/2025
 //-----------------------------------------------------------------------------
 inline void HBNOISE::evalDeviceNoiseDensities(
+  bool isBaseband,
   Xyce::Analysis::NoiseData&    noiseData, 
   Linear::Vector&               Xreal, 
-  Linear::Vector&               Ximag) 
+  Linear::Vector&               Ximag,
+  double& totalRelativeNoiseDens) 
   {
   int numNoiseThisDevice = noiseData.numSources;
 
@@ -1198,9 +1085,8 @@ inline void HBNOISE::evalDeviceNoiseDensities(
       noiseData.gainSqr[j] = (realVal*realVal) + (imagVal*imagVal);
     }
 
-    noiseData.totalNoise += fabs(noiseData.noiseDens[j]); // sum of all noise sources of the device (not sure what this is for!)
-    noiseData.outputNoiseDens[j] = noiseData.gainSqr[j] * fabs(noiseData.noiseDens[j]); // output noise density of the j'th noise source
-    noiseData.lnNoiseDens[j] = std::log(std::max( noiseData.outputNoiseDens[j],N_MINLOG) ); // log of output noise density of the j'th noise source
+    double factor = (isBaseband) ? 1.0 : 0.5;
+    noiseData.outputNoiseDens[j] = factor * noiseData.gainSqr[j] * fabs(noiseData.noiseDens[j]); // output noise density of the j'th noise source
     noiseData.relativeNoiseDens[j] = noiseData.outputNoiseDens[j] / outputValSqr_; // AM or PM noise density
     noiseData.totalOutputNoise += noiseData.outputNoiseDens[j]; // total output noise density of the device
   }
@@ -1732,8 +1618,10 @@ bool HBNOISE::updateHarmonicSpaceMatrix_G_()
                 // a conditional LSB can be both LSB and USB!
                 // a conditional USB can be both LSB and USB!
                 int sign = e>f ? 1 : -1;
-                int rowCosine = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
-                int rowSine   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
+                int rowCosineL = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
+                int rowCosineU = sign==1 ? 4*deltaAbs  :  4*deltaAbs-2;
+                int rowSineL   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
+                int rowSineU   = sign==1 ? 4*deltaAbs+1 : 4*deltaAbs-1;
 
                 // conditional LSB terms:
                 // + 0.5 * [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ (+V_jeIC+V_jeQS)*cos(e*wc*t-wm*t) - (-V_jeIS+V_jeQC)*sin(e*wc*t-wm*t) ]
@@ -1744,13 +1632,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_G_()
                 // + 0.25 * G_ijfI * (+V_jeIC+V_jeQS) * cos(delta*wc*t-wm*t) + 0.25 * G_ijfQ * (-V_jeIS+V_jeQC) * cos(delta*wc*t-wm*t)
                 // RHS has positive sign
                 // + 0.25 * G_ijfI * V_jeIC * cos(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e-2), i, j, +0.25*2*Gf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosineL, 4*e-2), i, j, +0.25*2*Gf_[i]->block(j)[2*f  ]);
                 // + 0.25 * G_ijfI * V_jeQS * cos(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e+1), i, j, +0.25*2*Gf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosineL, 4*e+1), i, j, +0.25*2*Gf_[i]->block(j)[2*f  ]);
                 // - 0.25 * G_ijfQ * V_jeIS * cos(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e-1), i, j, -0.25*2*Gf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosineL, 4*e-1), i, j, -0.25*2*Gf_[i]->block(j)[2*f+1]);
                 // + 0.25 * G_ijfQ * V_jeQC * cos(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e  ), i, j, +0.25*2*Gf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosineL, 4*e  ), i, j, +0.25*2*Gf_[i]->block(j)[2*f+1]);
 
                 // conditional LSB sine
                 // + 0.5 * G_ijfI * cos(f*wc*t) * (+V_jeIS-V_jeQC)*sin(e*wc*t-wm*t) + 0.5 * G_ijfQ * sin(f*wc*t) * (-V_jeIC-V_jeQS)*cos(e*wc*t-wm*t)
@@ -1758,13 +1646,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_G_()
                 // + 0.25 * G_ijfI * (+V_jeIS-V_jeQC)*sin(delta*wc*t-wm*t) + 0.25 * G_ijfQ * (+V_jeIC+V_jeQS)*sin(delta*wc*t-wm*t)
                 // RHS has negative sign
                 // + 0.25 * G_ijfI * V_jeIS * sin(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e-1), i, j, -sign*0.25*2*Gf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSineL, 4*e-1), i, j, -sign*0.25*2*Gf_[i]->block(j)[2*f  ]);
                 // - 0.25 * G_ijfI * V_jeQC * sin(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e  ), i, j, +sign*0.25*2*Gf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSineL, 4*e  ), i, j, +sign*0.25*2*Gf_[i]->block(j)[2*f  ]);
                 // + 0.25 * G_ijfQ * V_jeIC * sin(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e-2), i, j, -sign*0.25*2*Gf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSineL, 4*e-2), i, j, -sign*0.25*2*Gf_[i]->block(j)[2*f+1]);
                 // + 0.25 * G_ijfQ * V_jeQS * sin(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e+1), i, j, -sign*0.25*2*Gf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSineL, 4*e+1), i, j, -sign*0.25*2*Gf_[i]->block(j)[2*f+1]);
 
                 // conditional USB terms:
                 // + 0.5 * [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ (+V_jeIC-V_jeQS)*cos(e*wc*t+wm*t) - (+V_jeIS+V_jeQC)*sin(e*wc*t+wm*t) ]
@@ -1775,13 +1663,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_G_()
                 // + 0.25 * G_ijfI * (+V_jeIC-V_jeQS) * cos(delta*wc*t+wm*t) + 0.25 * G_ijfQ * (+V_jeIS+V_jeQC) * cos(delta*wc*t+wm*t)
                 // RHS has positive sign
                 // + 0.25 * G_ijfI * V_jeIC * cos(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e-2), i, j, +0.25*2*Gf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosineU, 4*e-2), i, j, +0.25*2*Gf_[i]->block(j)[2*f  ]);
                 // - 0.25 * G_ijfI * V_jeQS * cos(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e+1), i, j, -0.25*2*Gf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosineU, 4*e+1), i, j, -0.25*2*Gf_[i]->block(j)[2*f  ]);
                 // + 0.25 * G_ijfQ * V_jeIS * cos(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e-1), i, j, +0.25*2*Gf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosineU, 4*e-1), i, j, +0.25*2*Gf_[i]->block(j)[2*f+1]);
                 // + 0.25 * G_ijfQ * V_jeQC * cos(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e  ), i, j, +0.25*2*Gf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosineU, 4*e  ), i, j, +0.25*2*Gf_[i]->block(j)[2*f+1]);
 
                 // conditional USB sine
                 // + 0.5 * G_ijfI * cos(f*wc*t) * (-V_jeIS-V_jeQC)*sin(e*wc*t+wm*t) + 0.5 * G_ijfQ * sin(f*wc*t) * (-V_jeIC+V_jeQS)*cos(e*wc*t+wm*t)
@@ -1789,13 +1677,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_G_()
                 // + 0.25 * G_ijfI * (-V_jeIS-V_jeQC)*sin(delta*wc*t+wm*t) + 0.25 * G_ijfQ * (+V_jeIC-V_jeQS)*sin(delta*wc*t+wm*t)
                 // RHS has negative sign
                 // - 0.25 * G_ijfI * V_jeIS * sin(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e-1), i, j, +0.25*sign*2*Gf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSineU, 4*e-1), i, j, +0.25*sign*2*Gf_[i]->block(j)[2*f  ]);
                 // - 0.25 * G_ijfI * V_jeQC * sin(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e  ), i, j, +0.25*sign*2*Gf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSineU, 4*e  ), i, j, +0.25*sign*2*Gf_[i]->block(j)[2*f  ]);
                 // + 0.25 * G_ijfQ * V_jeIC * sin(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e-2), i, j, -0.25*sign*2*Gf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSineU, 4*e-2), i, j, -0.25*sign*2*Gf_[i]->block(j)[2*f+1]);
                 // - 0.25 * G_ijfQ * V_jeQS * sin(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e+1), i, j, +0.25*sign*2*Gf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_G_->block(rowSineU, 4*e+1), i, j, +0.25*sign*2*Gf_[i]->block(j)[2*f+1]);
               }
             } // end of f>0 and e>0
           } // end of e loop
@@ -2044,8 +1932,10 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_0_()
                 // a conditional LSB can be both LSB and USB!
                 // a conditional USB can be both LSB and USB!
                 int sign = e>f ? 1 : -1;
-                int rowCosine = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
-                int rowSine   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
+                int rowCosineL = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
+                int rowCosineU = sign==1 ? 4*deltaAbs  :  4*deltaAbs-2;
+                int rowSineL   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
+                int rowSineU   = sign==1 ? 4*deltaAbs+1 : 4*deltaAbs-1;
 
                 // conditional LSB terms:
                 // + 0.5 * [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ (+V_jeIC+V_jeQS)*cos(e*wc*t-wm*t) - (-V_jeIS+V_jeQC)*sin(e*wc*t-wm*t) ]
@@ -2057,16 +1947,16 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_0_()
                 // RHS has positive sign
                 // + 0.25 * G_ijfI * V_jeIC * cos(delta*wc*t-wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e-2), i, j, +0.25*Gf_[i]->block(j)[2*f  ]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosine, 4*e-2), i, j, +0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosineL, 4*e-2), i, j, +0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
                 // + 0.25 * G_ijfI * V_jeQS * cos(delta*wc*t-wm*t)
                 //setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e+1), i, j, +0.25*Gf_[i]->block(j)[2*f  ]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosine, 4*e+1), i, j, +0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosineL, 4*e+1), i, j, +0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
                 // - 0.25 * G_ijfQ * V_jeIS * cos(delta*wc*t-wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e-1), i, j, -0.25*Gf_[i]->block(j)[2*f+1]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosine, 4*e-1), i, j, -0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosineL, 4*e-1), i, j, -0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
                 // + 0.25 * G_ijfQ * V_jeQC * cos(delta*wc*t-wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e  ), i, j, +0.25*Gf_[i]->block(j)[2*f+1]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosine, 4*e  ), i, j, +0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosineL, 4*e  ), i, j, +0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
 
                 // conditional LSB sine
                 // + 0.5 * G_ijfI * cos(f*wc*t) * (+V_jeIS-V_jeQC)*sin(e*wc*t-wm*t) + 0.5 * G_ijfQ * sin(f*wc*t) * (-V_jeIC-V_jeQS)*cos(e*wc*t-wm*t)
@@ -2075,16 +1965,16 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_0_()
                 // RHS has negative sign
                 // + 0.25 * G_ijfI * V_jeIS * sin(delta*wc*t-wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e-1), i, j, -sign*0.25*Gf_[i]->block(j)[2*f  ]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSine, 4*e-1), i, j, -sign*0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSineL, 4*e-1), i, j, -sign*0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
                 // - 0.25 * G_ijfI * V_jeQC * sin(delta*wc*t-wm*t)
                 //setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e  ), i, j, +sign*0.25*Gf_[i]->block(j)[2*f  ]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSine, 4*e  ), i, j, +sign*0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSineL, 4*e  ), i, j, +sign*0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
                 // + 0.25 * G_ijfQ * V_jeIC * sin(delta*wc*t-wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e-2), i, j, -sign*0.25*Gf_[i]->block(j)[2*f+1]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSine, 4*e-2), i, j, -sign*0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSineL, 4*e-2), i, j, -sign*0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
                 // + 0.25 * G_ijfQ * V_jeQS * sin(delta*wc*t-wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e+1), i, j, -sign*0.25*Gf_[i]->block(j)[2*f+1]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSine, 4*e+1), i, j, -sign*0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSineL, 4*e+1), i, j, -sign*0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
 
                 // conditional USB terms:
                 // + 0.5 * [ G_ijfI*cos(f*wc*t) - G_ijfQ*sin(f*wc*t) ] * [ (+V_jeIC-V_jeQS)*cos(e*wc*t+wm*t) - (+V_jeIS+V_jeQC)*sin(e*wc*t+wm*t) ]
@@ -2096,16 +1986,16 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_0_()
                 // RHS has positive sign
                 // + 0.25 * G_ijfI * V_jeIC * cos(delta*wc*t+wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e-2), i, j, +0.25*Gf_[i]->block(j)[2*f  ]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosine, 4*e-2), i, j, +0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosineU, 4*e-2), i, j, +0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
                 // - 0.25 * G_ijfI * V_jeQS * cos(delta*wc*t+wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e+1), i, j, -0.25*Gf_[i]->block(j)[2*f  ]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosine, 4*e+1), i, j, -0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosineU, 4*e+1), i, j, -0.25*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
                 // + 0.25 * G_ijfQ * V_jeIS * cos(delta*wc*t+wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e-1), i, j, +0.25*Gf_[i]->block(j)[2*f+1]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosine, 4*e-1), i, j, +0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosineU, 4*e-1), i, j, +0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
                 // + 0.25 * G_ijfQ * V_jeQC * cos(delta*wc*t+wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowCosine, 4*e  ), i, j, +0.25*Gf_[i]->block(j)[2*f+1]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosine, 4*e  ), i, j, +0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowCosineU, 4*e  ), i, j, +0.25*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
 
                 // conditional USB sine
                 // + 0.5 * G_ijfI * cos(f*wc*t) * (-V_jeIS-V_jeQC)*sin(e*wc*t+wm*t) + 0.5 * G_ijfQ * sin(f*wc*t) * (-V_jeIC+V_jeQS)*cos(e*wc*t+wm*t)
@@ -2114,16 +2004,16 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_0_()
                 // RHS has negative sign
                 // - 0.25 * G_ijfI * V_jeIS * sin(delta*wc*t+wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e-1), i, j, +0.25*sign*Gf_[i]->block(j)[2*f  ]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSine, 4*e-1), i, j, +0.25*sign*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSineU, 4*e-1), i, j, +0.25*sign*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
                 // - 0.25 * G_ijfI * V_jeQC * sin(delta*wc*t+wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e  ), i, j, +0.25*sign*Gf_[i]->block(j)[2*f  ]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSine, 4*e  ), i, j, +0.25*sign*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSineU, 4*e  ), i, j, +0.25*sign*(-f*omega_)*2*Cf_[i]->block(j)[2*f+1]);
                 // + 0.25 * G_ijfQ * V_jeIC * sin(delta*wc*t+wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e-2), i, j, -0.25*sign*Gf_[i]->block(j)[2*f+1]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSine, 4*e-2), i, j, -0.25*sign*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSineU, 4*e-2), i, j, -0.25*sign*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
                 // - 0.25 * G_ijfQ * V_jeQS * sin(delta*wc*t+wm*t)
                 // setMatrixElement(harmonicSpaceMatrix_G_->block(rowSine, 4*e+1), i, j, +0.25*sign*Gf_[i]->block(j)[2*f+1]);
-                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSine, 4*e+1), i, j, +0.25*sign*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_omegaC_0_->block(rowSineU, 4*e+1), i, j, +0.25*sign*(+f*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               }
             } // end of f>0 and e>0
           } // end of e loop
@@ -2335,8 +2225,10 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
               // a conditional LSB can be both LSB and USB!
               // a conditional USB can be both LSB and USB!
               int sign = e>=f ? 1 : -1;
-              int rowCosine = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
-              int rowSine   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
+              int rowCosineL = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
+              int rowCosineU = sign==1 ? 4*deltaAbs  :  4*deltaAbs+2;
+              int rowSineL   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
+              int rowSineU   = sign==1 ? 4*deltaAbs+1 : 4*deltaAbs-1;
 
               // conditional LSB terms:
               // [ C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) ] * [ + 0.5*(+V_jeIS-V_jeQC)*cos(e*wc*t-wm*t) - 0.5*(+V_jeIC+V_jeQS)*sin(e*wc*t-wm*t) ] * e*wc
@@ -2347,13 +2239,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
               // + 0.25 * C_ijfI * (+V_jeIS-V_jeQC) * cos(delta*wc*t-wm*t) + 0.25 * C_ijfQ * (+V_jeIC+V_jeQS) * cos(delta*wc*t-wm*t) // all *e*wc
               // RHS has positive sign
               // + 0.25 * C_ijfI * V_jeIS * cos(delta*wc*t-wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e-1), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosineL, 4*e-1), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // - 0.25 * C_ijfI * V_jeQC * cos(delta*wc*t-wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e  ), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosineL, 4*e  ), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // + 0.25 * C_ijfQ * V_jeIC * cos(delta*wc*t-wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e-2), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosineL, 4*e-2), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
               // + 0.25 * C_ijfQ * V_jeQS * cos(delta*wc*t-wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e+1), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosineL, 4*e+1), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
 
               // conditional LSB sine
               // + 0.5 *C_ijfI*cos(f*wc*t) * (-V_jeIC-V_jeQS)*sin(e*wc*t-wm*t) + 0.5 * C_ijfQ*sin(f*wc*t) * (-V_jeIS+V_jeQC)*cos(e*wc*t-wm*t) // all *e*wc
@@ -2361,13 +2253,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
               // + 0.25 * C_ijfI * (-V_jeIC-V_jeQS) * sin(delta*wc*t-wm*t) + 0.25 * C_ijfQ * (+V_jeIS-V_jeQC) * sin(delta*wc*t-wm*t) // all *e*wc
               // RHS has negative sign
               // - 0.25 * C_ijfI * V_jeIC * sin(delta*wc*t-wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e-2), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSineL, 4*e-2), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // - 0.25 * C_ijfI * V_jeQS * sin(delta*wc*t-wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e+1), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSineL, 4*e+1), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // + 0.25 * C_ijfQ * V_jeIS * sin(delta*wc*t-wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e-1), i, j, -0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSineL, 4*e-1), i, j, -0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
               // - 0.25 * C_ijfQ * V_jeQC * sin(delta*wc*t-wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e  ), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSineL, 4*e  ), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
 
               // conditional USB terms
               // [ C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) ] * [ + 0.5*(-V_jeIS-V_jeQC)*cos(e*wc*t+wm*t) - 0.5*(+V_jeIC-V_jeQS)*sin(e*wc*t+wm*t) ] * e*wc
@@ -2378,13 +2270,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
               // + 0.25 * C_ijfI * (-V_jeIS-V_jeQC) * cos(delta*wc*t+wm*t) + 0.25 * C_ijfQ * (+V_jeIC-V_jeQS) * cos(delta*wc*t+wm*t) // all *e*wc
               // RHS has positive sign
               // - 0.25 * C_ijfI * V_jeIS * cos(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e-1), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosineU, 4*e-1), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // - 0.25 * C_ijfI * V_jeQC * cos(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e  ), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosineU, 4*e  ), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // + 0.25 * C_ijfQ * V_jeIC * cos(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e-2), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosineU, 4*e-2), i, j, +0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
               // - 0.25 * C_ijfQ * V_jeQS * cos(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosine, 4*e+1), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowCosineU, 4*e+1), i, j, -0.25*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
 
               // conditional USB sine
               // + 0.5 *C_ijfI*cos(f*wc*t) * (-V_jeIC+V_jeQS)*sin(e*wc*t+wm*t) + 0.5 * C_ijfQ*sin(f*wc*t) * (+V_jeIS+V_jeQC)*cos(e*wc*t+wm*t) // all *e*wc
@@ -2392,13 +2284,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_omegaC_1_()
               // + 0.25 * C_ijfI * (-V_jeIC+V_jeQS) * sin(delta*wc*t+wm*t) + 0.25 * C_ijfQ * (-V_jeIS-V_jeQC) * sin(delta*wc*t+wm*t) // all *e*wc
               // RHS has negative sign
               // - 0.25 * C_ijfI * V_jeIC * sin(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e-2), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSineU, 4*e-2), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // + 0.25 * C_ijfI * V_jeQS * sin(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e+1), i, j, -0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSineU, 4*e+1), i, j, -0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f  ]);
               // - 0.25 * C_ijfQ * V_jeIS * sin(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e-1), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSineU, 4*e-1), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
               // - 0.25 * C_ijfQ * V_jeQC * sin(delta*wc*t+wm*t) *e*wc
-              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSine, 4*e  ), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
+              setMatrixElement(harmonicSpaceMatrix_omegaC_1_->block(rowSineU, 4*e  ), i, j, +0.25*sign*(e*omega_)*2*Cf_[i]->block(j)[2*f+1]);
             }
           } // end of e loop
         } // end of f!=0
@@ -2657,8 +2549,10 @@ bool HBNOISE::updateHarmonicSpaceMatrix_C_2_()
                 // a conditional LSB can be both LSB and USB!
                 // a conditional USB can be both LSB and USB!
                 int sign = e>=f ? 1 : -1;
-                int rowCosine = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
-                int rowSine   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
+                int rowCosineL = sign==1 ? 4*deltaAbs-2 : 4*deltaAbs  ;
+                int rowCosineU = sign==1 ? 4*deltaAbs   : 4*deltaAbs+2;
+                int rowSineL   = sign==1 ? 4*deltaAbs-1 : 4*deltaAbs+1;
+                int rowSineU   = sign==1 ? 4*deltaAbs+1 : 4*deltaAbs-1;
 
                 // conditional LSB terms:
                 // [ C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) ] * [ + 0.5*(-V_jeIS+V_jeQC)*cos(e*wc*t-wm*t) - 0.5*(-V_jeIC-V_jeQS)*sin(e*wc*t-wm*t) ]
@@ -2669,13 +2563,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_C_2_()
                 // + 0.25 * C_ijfI * (-V_jeIS+V_jeQC) * cos(delta*wc*t-wm*t) + 0.25 * C_ijfQ * (-V_jeIC-V_jeQS) * cos(delta*wc*t-wm*t)
                 // RHS has positive sign
                 // - 0.25 * C_ijfI * V_jeIS * cos(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosine, 4*e-1), i, j, -0.25*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosineL, 4*e-1), i, j, -0.25*2*Cf_[i]->block(j)[2*f  ]);
                 // + 0.25 * C_ijfI * V_jeQC * cos(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosine, 4*e  ), i, j, +0.25*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosineL, 4*e  ), i, j, +0.25*2*Cf_[i]->block(j)[2*f  ]);
                 // - 0.25 * C_ijfQ * V_jeIC * cos(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosine, 4*e-2), i, j, -0.25*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosineL, 4*e-2), i, j, -0.25*2*Cf_[i]->block(j)[2*f+1]);
                 // - 0.25 * C_ijfQ * V_jeQS * cos(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosine, 4*e+1), i, j, -0.25*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosineL, 4*e+1), i, j, -0.25*2*Cf_[i]->block(j)[2*f+1]);
 
                 // conditional LSB sine
                 // + 0.5 * C_ijfI*cos(f*wc*t) * (+V_jeIC+V_jeQS)*sin(e*wc*t-wm*t) + 0.5 * C_ijfQ*sin(f*wc*t) * (+V_jeIS-V_jeQC)*cos(e*wc*t-wm*t)
@@ -2683,13 +2577,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_C_2_()
                 // + 0.25 * C_ijfI * (+V_jeIC+V_jeQS)*sin(delta*wc*t-wm*t) + 0.25 * C_ijfQ * (-V_jeIS+V_jeQC)*sin(delta*wc*t-wm*t)
                 // RHS has negative sign
                 // + 0.25 * C_ijfI * V_jeIC * sin(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSine, 4*e-2), i, j, -0.25*sign*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSineL, 4*e-2), i, j, -0.25*sign*2*Cf_[i]->block(j)[2*f  ]);
                 // + 0.25 * C_ijfI * V_jeQS * sin(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSine, 4*e+1), i, j, -0.25*sign*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSineL, 4*e+1), i, j, -0.25*sign*2*Cf_[i]->block(j)[2*f  ]);
                 // - 0.25 * C_ijfQ * V_jeIS * sin(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSine, 4*e-1), i, j, +0.25*sign*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSineL, 4*e-1), i, j, +0.25*sign*2*Cf_[i]->block(j)[2*f+1]);
                 // + 0.25 * C_ijfQ * V_jeQC * sin(delta*wc*t-wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSine, 4*e  ), i, j, -0.25*sign*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSineL, 4*e  ), i, j, -0.25*sign*2*Cf_[i]->block(j)[2*f+1]);
 
                 // conditional USB terms:
                 // [ C_ijfI*cos(f*wc*t) - C_ijfQ*sin(f*wc*t) ] * [ + 0.5*(-V_jeIS-V_jeQC)*cos(e*wc*t+wm*t) - 0.5*(+V_jeIC-V_jeQS)*sin(e*wc*t+wm*t) ]
@@ -2700,13 +2594,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_C_2_()
                 // + 0.25 * C_ijfI * (-V_jeIS-V_jeQC) * cos(delta*wc*t+wm*t) + 0.25 * C_ijfQ * (+V_jeIC-V_jeQS) * cos(delta*wc*t+wm*t)
                 // RHS has positive sign
                 // - 0.25 * C_ijfI * V_jeIS * cos(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosine, 4*e-1), i, j, -0.25*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosineU, 4*e-1), i, j, -0.25*2*Cf_[i]->block(j)[2*f  ]);
                 // - 0.25 * C_ijfI * V_jeQC * cos(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosine, 4*e  ), i, j, -0.25*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosineU, 4*e  ), i, j, -0.25*2*Cf_[i]->block(j)[2*f  ]);
                 // + 0.25 * C_ijfQ * V_jeIC * cos(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosine, 4*e-2), i, j, +0.25*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosineU, 4*e-2), i, j, +0.25*2*Cf_[i]->block(j)[2*f+1]);
                 // - 0.25 * C_ijfQ * V_jeQS * cos(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosine, 4*e+1), i, j, -0.25*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowCosineU, 4*e+1), i, j, -0.25*2*Cf_[i]->block(j)[2*f+1]);
 
                 // conditional USB sine
                 // + 0.5 * C_ijfI*cos(f*wc*t) * (-V_jeIC+V_jeQS)*sin(e*wc*t+wm*t) + 0.5 * C_ijfQ*sin(f*wc*t) * (+V_jeIS+V_jeQC)*cos(e*wc*t+wm*t)
@@ -2714,13 +2608,13 @@ bool HBNOISE::updateHarmonicSpaceMatrix_C_2_()
                 // + 0.25 * C_ijfI * (-V_jeIC+V_jeQS)*sin(delta*wc*t+wm*t) + 0.25 * C_ijfQ * (-V_jeIS-V_jeQC)*sin(delta*wc*t+wm*t)
                 // RHS has negative sign
                 // - 0.25 * C_ijfI * V_jeIC * sin(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSine, 4*e-2), i, j, +0.25*sign*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSineU, 4*e-2), i, j, +0.25*sign*2*Cf_[i]->block(j)[2*f  ]);
                 // + 0.25 * C_ijfI * V_jeQS * sin(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSine, 4*e+1), i, j, -0.25*sign*2*Cf_[i]->block(j)[2*f  ]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSineU, 4*e+1), i, j, -0.25*sign*2*Cf_[i]->block(j)[2*f  ]);
                 // - 0.25 * C_ijfQ * V_jeIS * sin(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSine, 4*e-1), i, j, +0.25*sign*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSineU, 4*e-1), i, j, +0.25*sign*2*Cf_[i]->block(j)[2*f+1]);
                 // - 0.25 * C_ijfQ * V_jeQC * sin(delta*wc*t+wm*t)
-                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSine, 4*e  ), i, j, +0.25*sign*2*Cf_[i]->block(j)[2*f+1]);
+                setMatrixElement(harmonicSpaceMatrix_C_2_->block(rowSineU, 4*e  ), i, j, +0.25*sign*2*Cf_[i]->block(j)[2*f+1]);
               }
             } // end of f>0 and e>0
           } // end of e loop
@@ -2760,31 +2654,69 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
     double v1i = 0.0;
     double v2r = 0.0;
     double v2i = 0.0;
-    int lid;
+
+    Parallel::Manager &pds_manager = *analysisManager_.getPDSManager();
+    Parallel::Communicator &comm = *(pds_manager.getPDSComm());
+    Teuchos::RCP<Parallel::ParMap> baseMap = Teuchos::rcp_const_cast<Parallel::ParMap>( hbBuilderPtr_->getBaseSolutionMap() );
+    int myPID = comm.procID();
+    int root=-1;
     if (outputVarGIDs_.size()>0)
     {
       if (outputVarGIDs_[0] > -1)
       {
-        // TODO: correct for parallel
-        // v1r = bXf.getElementByGlobalIndex(outputVarGIDs_[0], 2*harmonicNumber_  );
-        // v1i = bXf.getElementByGlobalIndex(outputVarGIDs_[0], 2*harmonicNumber_+1);
-        v1r = bXf.block(outputVarGIDs_[0])[2*harmonicNumber_  ];
-        v1i = bXf.block(outputVarGIDs_[0])[2*harmonicNumber_+1];
+        int lid = baseMap->globalToLocalIndex(outputVarGIDs_[0]);
+        if (lid > -1) 
+        {
+          v1r = bXf.block(lid)[2*harmonicNumber_  ];
+          v1i = bXf.block(lid)[2*harmonicNumber_+1];
+          root = myPID;
+        }
+        Xyce::Parallel::AllReduce(comm.comm(), MPI_MAX, &root, 1);
+        comm.bcast( &v1r, 1, root );
+        comm.bcast( &v1i, 1, root );
       }
     }
 
+    root=-1;
     if (outputVarGIDs_.size()>1)
     {
-      if (outputVarGIDs_[0] > -1)
+      if (outputVarGIDs_[1] > -1)
       {
-        // v2r = bXf.getElementByGlobalIndex(outputVarGIDs_[1], 2*harmonicNumber_  );
-        // v2i = bXf.getElementByGlobalIndex(outputVarGIDs_[1], 2*harmonicNumber_+1);
-        v2r = bXf.block(outputVarGIDs_[1])[2*harmonicNumber_  ];
-        v2i = bXf.block(outputVarGIDs_[1])[2*harmonicNumber_+1];
+        int lid = baseMap->globalToLocalIndex(outputVarGIDs_[1]);
+        if (lid > -1) 
+        {
+          v2r = bXf.block(lid)[2*harmonicNumber_  ];
+          v2i = bXf.block(lid)[2*harmonicNumber_+1];
+          root = myPID;
+        }
+        Xyce::Parallel::AllReduce(comm.comm(), MPI_MAX, &root, 1);
+        comm.bcast( &v2r, 1, root );
+        comm.bcast( &v2i, 1, root );
       }
     }
-    outputValReal_ = v1r - v2r;
-    outputValImag_ = v1i - v2i;
+
+    // if (outputVarGIDs_.size()>0)
+    // {
+    //   if (outputVarGIDs_[0] > -1)
+    //   {
+    //     v1r = bXf.block(outputVarGIDs_[0])[2*harmonicNumber_  ];
+    //     v1i = bXf.block(outputVarGIDs_[0])[2*harmonicNumber_+1];
+    //   }
+    // }
+
+    // if (outputVarGIDs_.size()>1)
+    // {
+    //   if (outputVarGIDs_[1] > -1)
+    //   {
+    //     v2r = bXf.block(outputVarGIDs_[1])[2*harmonicNumber_  ];
+    //     v2i = bXf.block(outputVarGIDs_[1])[2*harmonicNumber_+1];
+    //   }
+    // }
+
+    // These are the factors behind cosine and sine, hence the 2*
+    // for instance cos(x) <=> 0.5*e^(j*x) + 0.5*e^(-j*x)
+    outputValReal_ = (harmonicNumber_==0) ? (v1r - v2r) : (2*(v1r-v2r));
+    outputValImag_ = (harmonicNumber_==0) ? (v1i - v2i) : (2*(v1i-v2i));
     outputValSqr_ = outputValReal_*outputValReal_ + outputValImag_*outputValImag_;
     outputValCosPhi_ = outputValReal_ / sqrt(outputValSqr_);
     outputValSinPhi_ = outputValImag_ / sqrt(outputValSqr_);
@@ -2839,9 +2771,8 @@ bool HBNOISE::updateLinearTimeVariantSystem_C_and_G_()
   // now we store dFdx and dQdx matrices
   for (int i = 0; i < BlockCount; ++i)
   {
-    deviceManager_.setFastTime(hbAnalysis_->fastTimes_[i]);
+    deviceManager_.setFastTime(hbAnalysis_->getFastTimes()[i]);
     loader_.updateSources();  // this is here to handle "fast" sources.
-    // *appVecPtr_ = bX.block(i);
     *currSolutionPtr = bXtPtr_->block(i);
     analysisManager_.getDataStore()->daeQVectorPtr->putScalar(0.0);
     analysisManager_.getDataStore()->daeFVectorPtr->putScalar(0.0);
@@ -2981,7 +2912,8 @@ void HBNOISE::setMatrixElement(Linear::Matrix& mat, int row, int col, double val
     static std::vector<int> indices{0};
     values[0] = value;
     indices[0] = col;
-    mat.putLocalRow(row, 1, values.data(), indices.data());
+    // mat.putLocalRow(row, 1, values.data(), indices.data());
+    mat.addIntoLocalRow(row, 1, values.data(), indices.data());
 }
 
 //-----------------------------------------------------------------------------
