@@ -330,7 +330,7 @@ bool setupSolverInfo(
   solver_state.dcopFlag             = analysis_manager.getAnalysisObject().getDCOPFlag();             // system_state.dcopFlag;
   solver_state.inputOPFlag          = analysis_manager.getAnalysisObject().getInputOPFlag();
   solver_state.acopFlag             = analysis_manager.getACOPFlag();
-  solver_state.noiseFlag             = analysis_manager.getNoiseFlag(); 
+  solver_state.noiseFlag            = analysis_manager.getNoiseFlag() || analysis_manager.getHBNOISEFlag(); 
   solver_state.tranopFlag           = analysis_manager.getTranOPFlag();
   solver_state.transientFlag        = analysis_manager.getTransientFlag();
   solver_state.dcsweepFlag          = analysis_manager.getDCSweepFlag();

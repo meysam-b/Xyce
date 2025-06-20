@@ -123,7 +123,7 @@ void EquationEvaluation:: updateTran(
     // update our outVarValues_ vector
     for( int i=0; i< numOutVars_; i++ )
     {
-      outVarValues_[i] = getOutputValue(comm, outputVars_[i], solnVec, stateVec, storeVec, 0, lead_current_vector, junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0);
+      outVarValues_[i] = getOutputValue(comm, outputVars_[i], solnVec, stateVec, storeVec, 0, lead_current_vector, junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     // not intuitive, but the output of this measure is just the outputVars_ operator evaluated 
@@ -172,7 +172,7 @@ void EquationEvaluation::updateDC(
                                           solnVec, stateVec, storeVec, 0,
                                           lead_current_vector,
                                           junction_voltage_vector,
-                                          lead_current_dqdt_vector, 0, 0, 0, 0);
+                                          lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
       }
       // not intuitive, but the output of this measure is just the outputVars_ operator evaluated 
       // within the FromToWindow.  At this time there shouldn't be more than one outVarValues_ so just
@@ -209,7 +209,7 @@ void EquationEvaluation::updateAC(
     for( int i=0; i< numOutVars_; i++ )
     {
       outVarValues_[i] = getOutputValue(comm, outputVars_[i], solnVec, 0, 0,
-                                        imaginaryVec, 0, 0, 0, 0, 0, 0, RFparams);
+                                        imaginaryVec, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, RFparams);
     }
     // not intuitive, but the output of this measure is just the outputVars_ operator evaluated 
     // within the FromToWindow.  At this time there shouldn't be more than one outVarValues_ so just
@@ -247,7 +247,7 @@ void EquationEvaluation::updateNoise(
     for( int i=0; i< numOutVars_; i++ )
     {
       outVarValues_[i] = getOutputValue(comm, outputVars_[i], solnVec, 0, 0,
-                                        imaginaryVec, 0, 0, 0, totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0);
+                                        imaginaryVec, 0, 0, 0, totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0, 0, 0, 0, 0);
     }
     // not intuitive, but the output of this measure is just the outputVars_ operator evaluated 
     // within the FromToWindow.  At this time there shouldn't be more than one outVarValues_ so just

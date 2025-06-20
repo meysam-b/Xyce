@@ -94,7 +94,7 @@ void ErrorFunctions::updateTran(
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, circuitTime,
       solnVec, stateVec, storeVec, 0, lead_current_vector,
-      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0);
+      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
 
     initialized_ = true;
     if ( withinYLimits_(outVarValues_[0]) )
@@ -138,7 +138,7 @@ void ErrorFunctions::updateDC(
       // update our outVarValues_ vector
       updateOutputVars(comm, outVarValues_, dcSweepVal,
         solnVec, stateVec, storeVec, 0, lead_current_vector,
-        junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0);
+        junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
 
       initialized_ = true;
       if ( withinYLimits_(outVarValues_[0]) )
@@ -171,7 +171,7 @@ void ErrorFunctions::updateAC(
   {
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, frequency, solnVec, 0, 0,
-                     imaginaryVec, 0, 0, 0, 0, 0, 0, RFparams);
+                     imaginaryVec, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, RFparams);
 
     initialized_ = true;
     if ( withinYLimits_(outVarValues_[0]) )
@@ -206,7 +206,7 @@ void ErrorFunctions::updateNoise(
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, frequency, solnVec, 0, 0,
                      imaginaryVec, 0, 0, 0,
-                     totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0);
+                     totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0, 0, 0, 0, 0);
 
     initialized_ = true;
     if ( withinYLimits_(outVarValues_[0]) )

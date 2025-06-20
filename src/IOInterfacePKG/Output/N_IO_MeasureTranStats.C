@@ -103,7 +103,7 @@ void TranStats::updateTran(
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, circuitTime,
       solnVec, stateVec, storeVec, 0, lead_current_vector,
-      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0);
+      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
 
       if( initialized_  )
       {

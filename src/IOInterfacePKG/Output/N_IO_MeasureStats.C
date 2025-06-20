@@ -118,7 +118,7 @@ void Stats::updateTran(
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, circuitTime,
       solnVec, stateVec, storeVec, 0, lead_current_vector,
-      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0 ,0);
+      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0 ,0, 0, 0, 0, 0);
 
     if( initialized_ )
     {
@@ -166,7 +166,7 @@ void Stats::updateDC(
                                         solnVec, stateVec, storeVec, 0,
                                         lead_current_vector,
                                         junction_voltage_vector,
-                                        lead_current_dqdt_vector, 0, 0 , 0, 0);
+                                        lead_current_dqdt_vector, 0, 0 , 0, 0, 0, 0, 0, 0);
 
       if ( initialized_ )
         updateMeasureVars(dcSweepVal, outVarValues_[0]);
@@ -200,7 +200,7 @@ void Stats::updateAC(
   {
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, frequency, solnVec, 0, 0,
-                     imaginaryVec, 0, 0, 0, 0, 0, 0, RFparams);
+                     imaginaryVec, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, RFparams);
 
     if ( initialized_ )
       updateMeasureVars(frequency, outVarValues_[0]);
@@ -236,7 +236,7 @@ void Stats::updateNoise(
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, frequency, solnVec, 0, 0,
                      imaginaryVec, 0, 0, 0,
-                     totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0);
+                     totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0, 0, 0, 0, 0);
 
     if ( initialized_ )
       updateMeasureVars(frequency, outVarValues_[0]);

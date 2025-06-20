@@ -317,7 +317,7 @@ void Error::updateTran(
                                         solnVec, stateVec, storeVec, 0,
                                         lead_current_vector,
                                         junction_voltage_vector,
-                                        lead_current_dqdt_vector, 0, 0, 0, 0);
+                                        lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
       simulationDataVals_.push_back( outVarValues_[i] );
     }
     initialized_ = true;
@@ -353,7 +353,7 @@ void Error::updateDC(
                                         solnVec, stateVec, storeVec, 0,
                                         lead_current_vector,
                                         junction_voltage_vector,
-                                        lead_current_dqdt_vector, 0, 0, 0, 0);
+                                        lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
       simulationDataVals_.push_back( outVarValues_[i] );
     }
     initialized_ = true;
@@ -387,7 +387,7 @@ void Error::updateAC(
     for( int i=0; i< numOutVars_; i++ )
     {
       outVarValues_[i] = getOutputValue(comm, outputVars_[i], solnVec, 0, 0,
-                                        imaginaryVec, 0, 0, 0, 0, 0, 0, RFparams );
+                                        imaginaryVec, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, RFparams );
       simulationDataVals_.push_back( outVarValues_[i] );
     }
     initialized_ = true;
@@ -414,7 +414,7 @@ void Error::updateNoise(
     {
       outVarValues_[i] = getOutputValue(comm, outputVars_[i], solnVec, 0, 0,
                                         imaginaryVec, 0, 0, 0,
-                                        totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0);
+                                        totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec,0, 0, 0, 0, 0);
       simulationDataVals_.push_back( outVarValues_[i] );
     }
     initialized_ = true;

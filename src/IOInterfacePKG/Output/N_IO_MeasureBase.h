@@ -130,6 +130,10 @@ protected:
       double totalOutputNoiseDens,
       double totalInputNoiseDens,
       const std::vector<Xyce::Analysis::NoiseData*> *noiseDataVec,
+      double amnoise,
+      double pmnoise,
+      const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVec,
+      const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec,
       const Util::Op::RFparamsData *RFparams);
 
     void resetBase();
@@ -178,6 +182,10 @@ public:
       double totalOutputNoiseDens,
       double totalInputNoiseDens,
       const std::vector<Xyce::Analysis::NoiseData*> *noiseDataVec,
+      double amnoise,
+      double pmnoise,
+      const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVec,
+      const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec,
       const Util::Op::RFparamsData *RFparams);
 
     const Util::Op::OpList* getOutputVars() const

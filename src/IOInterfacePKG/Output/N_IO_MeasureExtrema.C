@@ -122,7 +122,7 @@ void Extrema::updateTran(
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, circuitTime,
       solnVec, stateVec, storeVec, 0, lead_current_vector,
-      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0);
+      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
 
     // Need to set lastOutputValue_ variable to the current signal value
     // at the first time-step within the measurement window  (That
@@ -199,7 +199,7 @@ void Extrema::updateDC(
                                         solnVec, stateVec, storeVec, 0,
                                         lead_current_vector,
                                         junction_voltage_vector,
-                                        lead_current_dqdt_vector, 0, 0, 0, 0);
+                                        lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
 
       if ( !initialized_ )
         setMeasureVarsForNewWindow(dcSweepVal, outVarValues_[0]);
@@ -233,7 +233,7 @@ void Extrema::updateAC(
   {
     // update our outVarValues_ vector 
     updateOutputVars(comm, outVarValues_, frequency, solnVec, 0, 0,
-                     imaginaryVec, 0, 0, 0, 0, 0, 0, RFparams);
+                     imaginaryVec, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, RFparams);
 
     if ( !initialized_ )
       setMeasureVarsForNewWindow(frequency, outVarValues_[0]);
@@ -269,7 +269,7 @@ void Extrema::updateNoise(
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, frequency, solnVec, 0, 0,
                      imaginaryVec, 0, 0, 0,
-                     totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0);
+                     totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0, 0, 0, 0, 0);
 
     if ( !initialized_ )
       setMeasureVarsForNewWindow(frequency, outVarValues_[0]);

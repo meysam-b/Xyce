@@ -121,7 +121,7 @@ void FindWhenBase::updateTran(
   // update our outVarValues_ vector
   updateOutputVars(comm, outVarValues_, circuitTime,
     solnVec, stateVec, storeVec, 0, lead_current_vector,
-    junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0);
+    junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
 
   if (numPointsFound_ == 1)
     setMeasureState(circuitTime);
@@ -199,7 +199,7 @@ void FindWhenBase::updateDC(
     // update our outVarValues_ vector
     updateOutputVars(comm, outVarValues_, dcSweepVal,
       solnVec, stateVec, storeVec, 0, lead_current_vector,
-      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0);
+      junction_voltage_vector, lead_current_dqdt_vector, 0, 0, 0, 0, 0, 0, 0, 0);
 
     if (!firstStepInMeasureWindow_)
     {
@@ -278,7 +278,7 @@ void FindWhenBase::updateAC(
 
   // update our outVarValues_ vector
   updateOutputVars(comm, outVarValues_, frequency, solnVec, 0, 0,
-                   imaginaryVec, 0, 0, 0, 0, 0, 0, RFparams);
+                   imaginaryVec, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, RFparams);
 
   if (numPointsFound_ == 1)
     setMeasureState(frequency);
@@ -347,7 +347,7 @@ void FindWhenBase::updateNoise(
   // update our outVarValues_ vector
   updateOutputVars(comm, outVarValues_, frequency, solnVec, 0, 0,
                    imaginaryVec, 0, 0, 0,
-                   totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0);
+                   totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, 0, 0, 0, 0, 0);
 
   if (numPointsFound_ == 1)
     setMeasureState(frequency);
