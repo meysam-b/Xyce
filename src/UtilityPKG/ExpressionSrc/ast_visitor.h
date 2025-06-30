@@ -68,6 +68,12 @@ template <typename ScalarT> class dnoNoiseVarOp;
 template <typename ScalarT> class dniNoiseVarOp;
 template <typename ScalarT> class oNoiseOp;
 template <typename ScalarT> class iNoiseOp;
+
+template <typename ScalarT> class danNoiseVarOp;
+template <typename ScalarT> class dpnNoiseVarOp;
+template <typename ScalarT> class amNoiseOp;
+template <typename ScalarT> class pmNoiseOp;
+
 template <typename ScalarT> class funcOp;
 template <typename ScalarT> class pwrsOp;
 template <typename ScalarT> class sgnOp;
@@ -164,6 +170,12 @@ class nodeVisitor
   virtual void visit(Teuchos::RCP<dniNoiseVarOp<ScalarT> > & astNode) {}
   virtual void visit(Teuchos::RCP<oNoiseOp<ScalarT> > & astNode) {}
   virtual void visit(Teuchos::RCP<iNoiseOp<ScalarT> > & astNode) {}
+
+  virtual void visit(Teuchos::RCP<danNoiseVarOp<ScalarT> > & astNode) {}
+  virtual void visit(Teuchos::RCP<dpnNoiseVarOp<ScalarT> > & astNode) {}
+  virtual void visit(Teuchos::RCP<amNoiseOp<ScalarT> > & astNode) {}
+  virtual void visit(Teuchos::RCP<pmNoiseOp<ScalarT> > & astNode) {}
+
   virtual void visit(Teuchos::RCP<funcOp<ScalarT> > & astNode) {}
   virtual void visit(Teuchos::RCP<pwrsOp<ScalarT> > & astNode) {}
   virtual void visit(Teuchos::RCP<sgnOp<ScalarT> > & astNode) {}
@@ -377,6 +389,10 @@ public:
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & dniNoiseDevVar,
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & oNoise,
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & iNoise,
+  std::vector< Teuchos::RCP<astNode<ScalarT> > > & danNoiseDevVar,
+  std::vector< Teuchos::RCP<astNode<ScalarT> > > & dpnNoiseDevVar,
+  std::vector< Teuchos::RCP<astNode<ScalarT> > > & amNoise,
+  std::vector< Teuchos::RCP<astNode<ScalarT> > > & pmNoise,
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & sdt,
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & ddt,
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & src,
@@ -412,6 +428,10 @@ public:
     dniNoiseDevVarOpVector(dniNoiseDevVar),
     oNoiseOpVector(oNoise),
     iNoiseOpVector(iNoise),
+    danNoiseDevVarOpVector(danNoiseDevVar),
+    dpnNoiseDevVarOpVector(dpnNoiseDevVar),
+    amNoiseOpVector(amNoise),
+    pmNoiseOpVector(pmNoise),
     sdtOpVector(sdt),
     ddtOpVector(ddt),
     srcOpVector(src),
@@ -448,6 +468,10 @@ public:
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & dniNoiseDevVarOpVector;
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & oNoiseOpVector;
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & iNoiseOpVector;
+  std::vector< Teuchos::RCP<astNode<ScalarT> > > & danNoiseDevVarOpVector;
+  std::vector< Teuchos::RCP<astNode<ScalarT> > > & dpnNoiseDevVarOpVector;
+  std::vector< Teuchos::RCP<astNode<ScalarT> > > & amNoiseOpVector;
+  std::vector< Teuchos::RCP<astNode<ScalarT> > > & pmNoiseOpVector;
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & sdtOpVector;
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & ddtOpVector;
   std::vector< Teuchos::RCP<astNode<ScalarT> > > & srcOpVector;

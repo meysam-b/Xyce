@@ -315,6 +315,7 @@ HBNOISE::HBNOISE(
 //-----------------------------------------------------------------------------
 HBNOISE::~HBNOISE()
 {
+  // TODO: Delete all vectors and matrices
   for (size_t i = 0; i < noiseDataVecI_.size(); ++i) {
     delete noiseDataVecI_[i];
   }
@@ -1043,7 +1044,7 @@ void HBNOISE::prepareHBNOISEOutputVectors_(
 // Function      : HBNOISE::evalDeviceNoiseDensities
 // Purpose       : Evaluates the noise densities for a given device
 // Special Notes : This function is used to evaluate the noise densities for a given device
-// Scope         : This function is used to evaluate the noise densities for a given device
+// Scope         : 
 // Creator       : Meysam Bahmanian
 // Creation Date : 6/7/2025
 //-----------------------------------------------------------------------------

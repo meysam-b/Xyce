@@ -270,6 +270,28 @@ bool outputsXyceExpressionGroup::setupGroup(newExpression &expr)
     Util::Op::makeOps(comm_.comm(), op_builder_manager, NetlistLocation(), paramList.begin(), paramList.end(), std::back_inserter(iNoiseOps_));
   }
 
+  if ( !(expr.amNoiseOpVec_.empty()) )
+  {
+    ParamList paramList;
+    for (int ii=0;ii<expr.amNoiseOpVec_.size();ii++)
+    {
+      Teuchos::RCP<amNoiseOp<usedType> > amnoiseOp = Teuchos::rcp_static_cast<amNoiseOp<usedType> > (expr.amNoiseOpVec_[ii]);
+      paramList.push_back(Param(std::string("AMNOISE"),0.0));
+    }
+    Util::Op::makeOps(comm_.comm(), op_builder_manager, NetlistLocation(), paramList.begin(), paramList.end(), std::back_inserter(amNoiseOps_));
+  }
+
+  if ( !(expr.pmNoiseOpVec_.empty()) )
+  {
+    ParamList paramList;
+    for (int ii=0;ii<expr.pmNoiseOpVec_.size();ii++)
+    {
+      Teuchos::RCP<pmNoiseOp<usedType> > pmnoiseOp = Teuchos::rcp_static_cast<pmNoiseOp<usedType> > (expr.pmNoiseOpVec_[ii]);
+      paramList.push_back(Param(std::string("PMNOISE"),0.0));
+    }
+    Util::Op::makeOps(comm_.comm(), op_builder_manager, NetlistLocation(), paramList.begin(), paramList.end(), std::back_inserter(pmNoiseOps_));
+  }
+
   if ( !(expr.powerOpVec_.empty()) )
   {
     ParamList paramList;
@@ -473,6 +495,32 @@ bool outputsXyceExpressionGroup::putValues(newExpression & expr)
     {
       Teuchos::RCP<iNoiseOp<usedType> > inoiseOp = Teuchos::rcp_static_cast<iNoiseOp<usedType> > (expr.iNoiseOpVec_[ii]);
       usedType & val=inoiseOp->getNoiseVar();
+      usedType oldval=val;
+      val = Util::Op::getValue(comm_.comm(), *(*it), opData_);
+      if (val != oldval) noChange = false;
+    }
+  }
+
+  if ( !(expr.amNoiseOpVec_.empty()) )
+  {
+    Util::Op::OpList::const_iterator it = amNoiseOps_.begin();
+    for (int ii=0;ii<expr.amNoiseOpVec_.size();ii++,++it)
+    {
+      Teuchos::RCP<amNoiseOp<usedType> > amnoiseOp = Teuchos::rcp_static_cast<amNoiseOp<usedType> > (expr.amNoiseOpVec_[ii]);
+      usedType & val=amnoiseOp->getNoiseVar();
+      usedType oldval=val;
+      val = Util::Op::getValue(comm_.comm(), *(*it), opData_);
+      if (val != oldval) noChange = false;
+    }
+  }
+
+  if ( !(expr.pmNoiseOpVec_.empty()) )
+  {
+    Util::Op::OpList::const_iterator it = pmNoiseOps_.begin();
+    for (int ii=0;ii<expr.pmNoiseOpVec_.size();ii++,++it)
+    {
+      Teuchos::RCP<pmNoiseOp<usedType> > pmnoiseOp = Teuchos::rcp_static_cast<pmNoiseOp<usedType> > (expr.pmNoiseOpVec_[ii]);
+      usedType & val=pmnoiseOp->getNoiseVar();
       usedType oldval=val;
       val = Util::Op::getValue(comm_.comm(), *(*it), opData_);
       if (val != oldval) noChange = false;
@@ -1110,6 +1158,142 @@ bool outputsXyceExpressionGroup::getINoise(std::complex<double> & retval)
 {
   double val=0.0;
   bool retBool = getINoise(val);
+  retval=std::complex<double>(val,0.0); 
+  return retBool;
+}
+
+//-------------------------------------------------------------------------------
+// Function      : outputsXyceExpressionGroup::getAMNoise
+// Purpose       : 
+// Special Notes :
+// Scope         :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/30/2025 
+//-------------------------------------------------------------------------------
+bool outputsXyceExpressionGroup::getAMNoise(double & retval) 
+{ 
+  retval=0.0; 
+  if (!analysisManager_.getHBNOISEFlag())
+  {
+    Report::UserError0() << "AMNOISE operator only supported for .HBNOISE analyses";
+    return false;
+  }
+  else
+  {
+    ParamList paramList;
+    paramList.push_back(Param(std::string("AMNOISE"),0.0));
+    Op::OpList amnoiseVarOps_;
+
+    const Util::Op::BuilderManager & op_builder_manager = outputManager_.getOpBuilderManager();
+    Util::Op::makeOps(comm_.comm(), op_builder_manager, NetlistLocation(), paramList.begin(), paramList.end(), std::back_inserter(amnoiseVarOps_));
+
+    // loop over expressionOps_ to get all the values.
+    std::vector<double> variableValues;
+    for (Util::Op::OpList::const_iterator it = amnoiseVarOps_.begin(); it != amnoiseVarOps_.end(); ++it)
+    {
+      variableValues.push_back( Util::Op::getValue(comm_.comm(), *(*it), opData_).real());
+    }
+
+    for (Util::Op::OpList::const_iterator it = amnoiseVarOps_.begin(); it != amnoiseVarOps_.end(); ++it)
+    {
+      delete *it;
+    }
+
+    retval = 0.0;
+    if ( !(variableValues.empty()) )
+    {
+      retval = variableValues[0];
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+//-------------------------------------------------------------------------------
+// Function      : outputsXyceExpressionGroup::getAMNoise
+// Purpose       : 
+// Special Notes :
+// Scope         :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/30/2025 
+//-------------------------------------------------------------------------------
+bool outputsXyceExpressionGroup::getAMNoise(std::complex<double> & retval) 
+{
+  double val=0.0;
+  bool retBool = getAMNoise(val);
+  retval=std::complex<double>(val,0.0); 
+  return retBool;
+}
+
+//-------------------------------------------------------------------------------
+// Function      : outputsXyceExpressionGroup::getPMNoise
+// Purpose       : 
+// Special Notes :
+// Scope         :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/30/2025 
+//-------------------------------------------------------------------------------
+bool outputsXyceExpressionGroup::getPMNoise(double & retval) 
+{ 
+  retval=0.0; 
+  if (!analysisManager_.getHBNOISEFlag())
+  {
+    Report::UserError0() << "PMNOISE operator only supported for .HBNOISE analyses";
+    return false;
+  }
+  else
+  {
+    ParamList paramList;
+    paramList.push_back(Param(std::string("PMNOISE"),0.0));
+    Op::OpList pmnoiseVarOps_;
+
+    const Util::Op::BuilderManager & op_builder_manager = outputManager_.getOpBuilderManager();
+    Util::Op::makeOps(comm_.comm(), op_builder_manager, NetlistLocation(), paramList.begin(), paramList.end(), std::back_inserter(pmnoiseVarOps_));
+
+    // loop over expressionOps_ to get all the values.
+    std::vector<double> variableValues;
+    for (Util::Op::OpList::const_iterator it = pmnoiseVarOps_.begin(); it != pmnoiseVarOps_.end(); ++it)
+    {
+      variableValues.push_back( Util::Op::getValue(comm_.comm(), *(*it), opData_).real());
+    }
+
+    for (Util::Op::OpList::const_iterator it = pmnoiseVarOps_.begin(); it != pmnoiseVarOps_.end(); ++it)
+    {
+      delete *it;
+    }
+
+    retval = 0.0;
+    if ( !(variableValues.empty()) )
+    {
+      retval = variableValues[0];
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+//-------------------------------------------------------------------------------
+// Function      : outputsXyceExpressionGroup::getPMNoise
+// Purpose       : 
+// Special Notes :
+// Scope         :
+// Creator       : Meysam Bahmanian
+// Creation Date : 6/30/2025 
+//-------------------------------------------------------------------------------
+bool outputsXyceExpressionGroup::getPMNoise(std::complex<double> & retval) 
+{
+  double val=0.0;
+  bool retBool = getPMNoise(val);
   retval=std::complex<double>(val,0.0); 
   return retBool;
 }

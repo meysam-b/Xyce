@@ -93,6 +93,18 @@ public:
   virtual bool getINoise(double & retval) { retval=0.0; return false; }
   virtual bool getINoise(std::complex<double> & retval) {retval=std::complex<double>(0.0,0.0); return false; }
 
+  virtual bool getDanNoiseDeviceVar(const std::vector<std::string> & deviceNames, double & retval) { retval=0.0; return false; }
+  virtual bool getDanNoiseDeviceVar(const std::vector<std::string> & deviceNames, std::complex<double> & retval) {retval=std::complex<double>(0.0,0.0); return false; }
+
+  virtual bool getDpnNoiseDeviceVar(const std::vector<std::string> & deviceNames, double & retval) { retval=0.0; return false; }
+  virtual bool getDpnNoiseDeviceVar(const std::vector<std::string> & deviceNames, std::complex<double> & retval) {retval=std::complex<double>(0.0,0.0); return false; }
+
+  virtual bool getAMNoise(double & retval) { retval=0.0; return false; }
+  virtual bool getAMNoise(std::complex<double> & retval) {retval=std::complex<double>(0.0,0.0); return false; }
+
+  virtual bool getPMNoise(double & retval) { retval=0.0; return false; }
+  virtual bool getPMNoise(std::complex<double> & retval) {retval=std::complex<double>(0.0,0.0); return false; }
+
   virtual bool getPower(const std::string & tag, const std::string & deviceName, double & retval) { retval=0.0; return false; }
   virtual bool getPower(const std::string & tag, const std::string & deviceName, std::complex<double> & retval) {retval=std::complex<double>(0.0,0.0); return false; }
 

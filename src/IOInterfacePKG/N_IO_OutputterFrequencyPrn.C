@@ -130,7 +130,7 @@ FrequencyPrn::doOutputFrequency(
 
   std::vector<complex> result_list;
   getValues(comm, opList_, Util::Op::OpData(index_, &real_solution_vector, &imaginary_solution_vector,
-                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, &RFparams), result_list);
+                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, &RFparams), result_list);
 
   for (int i = 0; i < result_list.size(); ++i)
     if (os_)

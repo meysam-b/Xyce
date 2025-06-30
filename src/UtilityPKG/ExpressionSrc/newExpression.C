@@ -933,6 +933,11 @@ void newExpression::clear ()
 
   iNoiseOpVec_.clear();
 
+  danNoiseDevVarOpVec_.clear();
+  dpnNoiseDevVarOpVec_.clear();
+  amNoiseOpVec_.clear();
+  pmNoiseOpVec_.clear();
+
   sdtOpVec_.clear();
   ddtOpVec_.clear();
   phaseOpVec_.clear();
@@ -1212,6 +1217,10 @@ NEW_EXP_OUTPUT_ARRAY(dnoNoiseDevVarOpVec_)
 NEW_EXP_OUTPUT_ARRAY(dniNoiseDevVarOpVec_)
 NEW_EXP_OUTPUT_ARRAY(oNoiseOpVec_)
 NEW_EXP_OUTPUT_ARRAY(iNoiseOpVec_)
+NEW_EXP_OUTPUT_ARRAY(danNoiseDevVarOpVec_)
+NEW_EXP_OUTPUT_ARRAY(dpnNoiseDevVarOpVec_)
+NEW_EXP_OUTPUT_ARRAY(amNoiseOpVec_)
+NEW_EXP_OUTPUT_ARRAY(pmNoiseOpVec_)
 NEW_EXP_OUTPUT_ARRAY(sdtOpVec_)
 NEW_EXP_OUTPUT_ARRAY(ddtOpVec_)
 NEW_EXP_OUTPUT_ARRAY(stpAstNodeVec_)
@@ -1311,6 +1320,10 @@ void newExpression::setupVariousAstArrays()
       dniNoiseDevVarOpVec_.clear();
       oNoiseOpVec_.clear();
       iNoiseOpVec_.clear();
+      danNoiseDevVarOpVec_.clear();
+      dpnNoiseDevVarOpVec_.clear();
+      amNoiseOpVec_.clear();
+      pmNoiseOpVec_.clear();
       sdtOpVec_.clear();
       ddtOpVec_.clear();
       srcAstNodeVec_.clear();

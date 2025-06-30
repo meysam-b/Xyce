@@ -298,7 +298,9 @@ LEAD I[SDGBEC1-9]
 <INITIAL>{ZOP}    |
 <INITIAL>"ZDB"    |
 <INITIAL>"DNO"    |
-<INITIAL>"DNI"    {
+<INITIAL>"DNI"    |
+<INITIAL>"DAN"    |
+<INITIAL>"DPN"    {
   std::string tmp = std::string(YYText());
   Xyce::Util::toUpper(tmp);
   lvalp->build<std::string *>()=new std::string( tmp );
@@ -482,7 +484,9 @@ LEAD I[SDGBEC1-9]
 <internaldevdef>[ \t]+  { llocp->step(); }   /* eat up whitespace */
 
 <INITIAL>"DNO"[ \t]*"("    |
-<INITIAL>"DNI"[ \t]*"("    {
+<INITIAL>"DNI"[ \t]*"("    |
+<INITIAL>"DAN"[ \t]*"("    |
+<INITIAL>"DPN"[ \t]*"("    {
   BEGIN(noisedevdef);
   std::string tmp = std::string(YYText());
   tmp.erase(std::remove_if(tmp.begin(),tmp.end(), ::isspace), tmp.end()); // remove whitespace
@@ -516,6 +520,16 @@ LEAD I[SDGBEC1-9]
 <INITIAL>"INOISE"     {
   lvalp->build<std::string *>()=new std::string(YYText());
   return XyceExpression::ExpressionParser::token::TOK_INOISE;
+}
+
+<INITIAL>"AMNOISE"     {
+  lvalp->build<std::string *>()=new std::string(YYText());
+  return XyceExpression::ExpressionParser::token::TOK_AMNOISE;
+}
+
+<INITIAL>"PMNOISE"     {
+  lvalp->build<std::string *>()=new std::string(YYText());
+  return XyceExpression::ExpressionParser::token::TOK_PMNOISE;
 }
 
  /* single device name by itself */

@@ -942,11 +942,8 @@ void Base::updateOutputVars(
   int vecIndex = 0;
   for (std::vector<Util::Op::Operator *>::const_iterator it = outputVars_.begin(); it != outputVars_.end(); ++it)
   {
-    Util::Op::OpData op_data = Util::Op::OpData(vecIndex, solnVec, imaginaryVec, stateVec, storeVec, 0, lead_current_vector, 0, junction_voltage_vector, 0, 0, 0, 0, 0, 0, totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, RFparams);
-    op_data.amnoise_ = amnoise;
-    op_data.pmnoise_ = pmnoise;
-    op_data.amnoiseDataVec_ = amnoiseDataVec;
-    op_data.pmnoiseDataVec_ = pmnoiseDataVec;
+    Util::Op::OpData op_data = Util::Op::OpData(vecIndex, solnVec, imaginaryVec, stateVec, storeVec, 0, lead_current_vector, 0, junction_voltage_vector, 0, 0, 0, 0, 0, 0, 
+      totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec,amnoise, pmnoise, amnoiseDataVec, pmnoiseDataVec, RFparams);
     outputVarVec[vecIndex] = getValue(comm, *(*it), op_data).real();
     vecIndex++;
   }
@@ -1021,11 +1018,8 @@ double Base::getOutputValue(
   const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec,
   const Util::Op::RFparamsData *RFparams)
 {
-  Util::Op::OpData op_data = Util::Op::OpData(0, solnVec, imaginaryVec, stateVec, storeVec, 0, lead_current_vector, 0, junction_voltage_vector,0, 0, 0, 0, 0, 0, totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, RFparams);
-  op_data.amnoise_ = amnoise;
-  op_data.pmnoise_ = pmnoise;
-  op_data.amnoiseDataVec_ = amnoiseDataVec;
-  op_data.pmnoiseDataVec_ = pmnoiseDataVec;
+  Util::Op::OpData op_data = Util::Op::OpData(0, solnVec, imaginaryVec, stateVec, storeVec, 0, lead_current_vector, 0, junction_voltage_vector,0, 0, 0, 0, 0, 0, 
+    totalOutputNoiseDens, totalInputNoiseDens, noiseDataVec, amnoise, pmnoise, amnoiseDataVec, pmnoiseDataVec, RFparams);
   double retVal = getValue(comm, *op, op_data).real();
   return retVal;
 }

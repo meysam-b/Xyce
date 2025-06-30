@@ -122,7 +122,7 @@ public:
     phaseOutputUsesRadians_(false),
     isShallowRandomDependent_(false),
     isOriginalShallowRandomDependent_(false),
-    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
+    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, danNoiseDevVarOpVec_, dpnNoiseDevVarOpVec_, amNoiseOpVec_, pmNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
   {};
 
   // primary constructor
@@ -173,7 +173,7 @@ public:
     phaseOutputUsesRadians_(false),
     isShallowRandomDependent_(false),
     isOriginalShallowRandomDependent_(false),
-    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
+    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, danNoiseDevVarOpVec_, dpnNoiseDevVarOpVec_, amNoiseOpVec_, pmNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
   {
     dtNodePtr_   = Teuchos::rcp(new specialsOp<usedType> (std::string("DT")));
     timeNodePtr_ = Teuchos::rcp(new specialsOp<usedType> (std::string("TIME")));
@@ -235,7 +235,7 @@ public:
     phaseOutputUsesRadians_(false),
     isShallowRandomDependent_(false),
     isOriginalShallowRandomDependent_(false),
-    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
+    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, danNoiseDevVarOpVec_, dpnNoiseDevVarOpVec_, amNoiseOpVec_, pmNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
   {
     dtNodePtr_   = Teuchos::rcp(new specialsOp<usedType> (std::string("DT")));
     timeNodePtr_ = Teuchos::rcp(new specialsOp<usedType> (std::string("TIME")));
@@ -302,7 +302,7 @@ public:
     phaseOutputUsesRadians_(false),
     isShallowRandomDependent_(false),
     isOriginalShallowRandomDependent_(false),
-    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
+    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, danNoiseDevVarOpVec_, dpnNoiseDevVarOpVec_, amNoiseOpVec_, pmNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
   {
     dtNodePtr_   = Teuchos::rcp(new specialsOp<usedType> (std::string("DT")));
     timeNodePtr_ = Teuchos::rcp(new specialsOp<usedType> (std::string("TIME")));
@@ -332,6 +332,10 @@ public:
       if (left->dniNoiseVarType()) { dniNoiseDevVarOpVec_.push_back(left); }
       if (left->oNoiseType()) { oNoiseOpVec_.push_back(left); }
       if (left->iNoiseType()) { iNoiseOpVec_.push_back(left); }
+      if (left->danNoiseVarType()) { danNoiseDevVarOpVec_.push_back(left); }
+      if (left->dpnNoiseVarType()) { dpnNoiseDevVarOpVec_.push_back(left); }
+      if (left->amNoiseType()) { amNoiseOpVec_.push_back(left); }
+      if (left->pmNoiseType()) { pmNoiseOpVec_.push_back(left); }
       if (left->sdtType()) { sdtOpVec_.push_back(left); }
       if (left->ddtType()) { ddtOpVec_.push_back(left); }
       if (left->srcType()) { srcAstNodeVec_.push_back(left); }
@@ -467,7 +471,7 @@ public:
     phaseOutputUsesRadians_(right.phaseOutputUsesRadians_),
     isShallowRandomDependent_(right.isShallowRandomDependent_),
     isOriginalShallowRandomDependent_(right.isOriginalShallowRandomDependent_),
-    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
+    opVectors_(paramOpVec_,funcOpVec_, voltOpVec_, currentOpVec_, leadCurrentOpVec_, bsrcCurrentOpVec_, powerOpVec_, internalDevVarOpVec_, dnoNoiseDevVarOpVec_, dniNoiseDevVarOpVec_, oNoiseOpVec_, iNoiseOpVec_, danNoiseDevVarOpVec_, dpnNoiseDevVarOpVec_, amNoiseOpVec_, pmNoiseOpVec_, sdtOpVec_, ddtOpVec_, srcAstNodeVec_, stpAstNodeVec_, compAstNodeVec_, limitAstNodeVec_, phaseOpVec_, sparamOpVec_, yparamOpVec_, zparamOpVec_, agaussOpVec_, gaussOpVec_, aunifOpVec_, unifOpVec_, randOpVec_, twoArgLimitOpVec_, isTimeDependent_, isTempDependent_, isVTDependent_, isFreqDependent_, isGminDependent_, isScheduleDependent_)
   {
     dtNodePtr_   = right.dtNodePtr_;
     timeNodePtr_ = right.timeNodePtr_;
@@ -699,6 +703,11 @@ public:
   std::vector<Teuchos::RCP<astNode<usedType> > > & getDniNoiseDevVarOpVec() { return dniNoiseDevVarOpVec_; }
   std::vector<Teuchos::RCP<astNode<usedType> > > & getONoiseOpVec() { return oNoiseOpVec_; }
   std::vector<Teuchos::RCP<astNode<usedType> > > & getINoiseOpVec() { return iNoiseOpVec_; }
+
+  std::vector<Teuchos::RCP<astNode<usedType> > > & getDanNoiseDevVarOpVec() { return danNoiseDevVarOpVec_; }
+  std::vector<Teuchos::RCP<astNode<usedType> > > & getDpnNoiseDevVarOpVec() { return dpnNoiseDevVarOpVec_; }
+  std::vector<Teuchos::RCP<astNode<usedType> > > & getAMNoiseOpVec() { return amNoiseOpVec_; }
+  std::vector<Teuchos::RCP<astNode<usedType> > > & getPMNoiseOpVec() { return pmNoiseOpVec_; }
 
   std::vector<Teuchos::RCP<astNode<usedType> > > & getSdtOpVec() { return sdtOpVec_; }
   std::vector<Teuchos::RCP<astNode<usedType> > > & getLocalSdtOpVec() { return localSdtOpVec_; }
@@ -990,6 +999,14 @@ private:
   std::vector<Teuchos::RCP<astNode<usedType> > > oNoiseOpVec_;
 
   std::vector<Teuchos::RCP<astNode<usedType> > > iNoiseOpVec_;
+
+  std::vector<Teuchos::RCP<astNode<usedType> > > danNoiseDevVarOpVec_;
+
+  std::vector<Teuchos::RCP<astNode<usedType> > > dpnNoiseDevVarOpVec_;
+
+  std::vector<Teuchos::RCP<astNode<usedType> > > amNoiseOpVec_;
+
+  std::vector<Teuchos::RCP<astNode<usedType> > > pmNoiseOpVec_;
 
   std::vector<Teuchos::RCP<astNode<usedType> > > sdtOpVec_;
   std::vector<Teuchos::RCP<astNode<usedType> > > localSdtOpVec_;

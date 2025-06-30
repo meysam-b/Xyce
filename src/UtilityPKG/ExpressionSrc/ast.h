@@ -304,6 +304,11 @@ class astNode : public staticsContainer
     virtual bool oNoiseType() { return false; }
     virtual bool iNoiseType() { return false; }
 
+    virtual bool danNoiseVarType() { return false; }
+    virtual bool dpnNoiseVarType() { return false; }
+    virtual bool amNoiseType() { return false; }
+    virtual bool pmNoiseType() { return false; }
+
     virtual bool sdtType() { return false; }
     virtual bool ddtType() { return false; }
     virtual bool srcType() { return false; }
@@ -2884,6 +2889,312 @@ class iNoiseOp: public astNode<ScalarT>
     ScalarT number_;
     int derivIndex_;
 };
+
+//-------------------------------------------------------------------------------
+// HB noise ops.  i.e. DAN, DPN, AMNOISE, PMNOISE
+//-------------------------------------------------------------------------------
+template <typename ScalarT>
+class danNoiseVarOp: public astNode<ScalarT>
+{
+  public:
+    danNoiseVarOp (const std::vector<std::string> & noiseDevices):
+      astNode<ScalarT>(),
+      number_(0.0),
+      noiseDevices_(noiseDevices),
+      derivIndex_(-1)
+    {
+      for(int ii=0;ii<noiseDevices.size();ii++) { Xyce::Util::toUpper(noiseDevices_[ii]); }
+    };
+
+    virtual ScalarT val() {return number_;}
+
+    virtual ScalarT dx(int i) { return (derivIndex_==i)?1.0:0.0; }
+
+    virtual void dx2(ScalarT & result, std::vector<ScalarT> & derivs, int numDerivs)
+    {
+      result = number_;
+      if ( !(derivs.empty() ) )
+      {
+        std::fill(derivs.begin(),derivs.end(),0.0);
+        if (derivIndex_>-1) derivs[derivIndex_] = 1.0;
+      }
+    }
+
+    virtual bool getIsComplex () { return false; }
+
+    virtual void generateExpressionString (std::string & str)
+    {
+      str = "DAN(";
+      int size = noiseDevices_.size();
+      for (int ii=0;ii<size;++ii)
+      {
+        str += noiseDevices_[ii]; 
+        if (size > 1 && ii < size-1) { str += ","; }
+      }
+      str += ")";
+    }
+
+    virtual void output(std::ostream & os, int indent=0)
+    {
+      os << std::setw(indent) << " ";
+      os << "DAN noise variable : devices = ";
+      for (int ii=0;ii<noiseDevices_.size();ii++)
+      {
+        os << noiseDevices_[ii] << " ";
+      }
+      os << " id = " << this->id_ << std::endl;
+      os << std::setw(indent) << " " << "value = " << val() <<std::endl;
+    }
+
+    virtual void compactOutput(std::ostream & os)
+    {
+      os << "DAN noise variable : devices = ";
+      for (int ii=0;ii<noiseDevices_.size();ii++) { os << noiseDevices_[ii] << " "; }
+      os << " id = " << this->id_ << std::endl;
+    }
+
+    virtual void codeGen (std::ostream & os )
+    {
+      os << "DAN_";
+      for (int ii=0;ii<noiseDevices_.size();ii++)
+      {
+        os << "_" << noiseDevices_[ii];
+      }
+    }
+
+    virtual void setDerivIndex(int i) {derivIndex_=i;};
+    virtual void unsetDerivIndex() {derivIndex_=-1;};
+
+    void setNoiseDevices (const std::vector<std::string> & devNames) { noiseDevices_ = devNames; }
+    std::vector<std::string> getNoiseDevices () { return noiseDevices_; }
+
+    ScalarT & getNoiseVar () { return number_; }
+    void setNoiseVar (ScalarT n) { number_ = n; }
+
+    virtual bool getIsTreeConstant() { return false; }
+    virtual bool danNoiseVarType()  { return true; };
+
+    //virtual std::string getName () { return noiseDevice_; }
+
+    virtual void accept (nodeVisitor<ScalarT> & visitor, Teuchos::RCP<astNode<ScalarT> > & thisAst_)
+    { 
+      Teuchos::RCP<danNoiseVarOp<ScalarT> > castToThis = Teuchos::rcp_static_cast<danNoiseVarOp<ScalarT> > (thisAst_);
+      visitor.visit( castToThis ); 
+    } // 2nd dispatch
+
+  private:
+    ScalarT number_;
+    std::vector<std::string> noiseDevices_;
+    int derivIndex_;
+};
+
+template <typename ScalarT>
+class dpnNoiseVarOp: public astNode<ScalarT>
+{
+  public:
+    dpnNoiseVarOp (const std::vector<std::string> & noiseDevices):
+      astNode<ScalarT>(),
+      number_(0.0),
+      noiseDevices_(noiseDevices),
+      derivIndex_(-1)
+    {
+      for(int ii=0;ii<noiseDevices.size();ii++) { Xyce::Util::toUpper(noiseDevices_[ii]); }
+    };
+
+    virtual ScalarT val() {return number_;}
+
+    virtual ScalarT dx(int i) { return (derivIndex_==i)?1.0:0.0; }
+
+    virtual void dx2(ScalarT & result, std::vector<ScalarT> & derivs, int numDerivs)
+    {
+      result = number_;
+      if ( !(derivs.empty() ) )
+      {
+        std::fill(derivs.begin(),derivs.end(),0.0);
+        if (derivIndex_>-1) derivs[derivIndex_] = 1.0;
+      }
+    }
+
+    virtual bool getIsComplex () { return false; }
+
+    virtual void generateExpressionString (std::string & str)
+    {
+      str = "DPN(";
+      int size = noiseDevices_.size();
+      for (int ii=0;ii<size;++ii)
+      {
+        str += noiseDevices_[ii]; 
+        if (size > 1 && ii < size-1) { str += ","; }
+      }
+      str += ")";
+    }
+
+    virtual void output(std::ostream & os, int indent=0)
+    {
+      os << std::setw(indent) << " ";
+      os << "DPN noise variable : devices = ";
+      for (int ii=0;ii<noiseDevices_.size();ii++)
+      {
+        os << noiseDevices_[ii] << " ";
+      }
+      os << " id = " << this->id_ << std::endl;
+      os << std::setw(indent) << " " << "value = " << val() <<std::endl;
+    }
+
+    virtual void compactOutput(std::ostream & os)
+    {
+      os << "DPN noise variable : devices = ";
+      for (int ii=0;ii<noiseDevices_.size();ii++) { os << noiseDevices_[ii] << " "; }
+      os << " id = " << this->id_ << std::endl;
+    }
+
+    virtual void codeGen (std::ostream & os )
+    {
+      os << "DPN_";
+      for (int ii=0;ii<noiseDevices_.size();ii++)
+      {
+        os << "_" << noiseDevices_[ii];
+      }
+    }
+
+    virtual void setDerivIndex(int i) {derivIndex_=i;};
+    virtual void unsetDerivIndex() {derivIndex_=-1;};
+
+    void setNoiseDevices (const std::vector<std::string> & devNames) { noiseDevices_ = devNames; }
+    std::vector<std::string> getNoiseDevices () { return noiseDevices_; }
+
+    ScalarT & getNoiseVar () { return number_; }
+    void setNoiseVar (ScalarT n) { number_ = n; }
+
+    virtual bool getIsTreeConstant() { return false; }
+    virtual bool dpnNoiseVarType()  { return true; };
+
+    //virtual std::string getName () { return noiseDevice_; }
+
+    virtual void accept (nodeVisitor<ScalarT> & visitor, Teuchos::RCP<astNode<ScalarT> > & thisAst_)
+    { 
+      Teuchos::RCP<dpnNoiseVarOp<ScalarT> > castToThis = Teuchos::rcp_static_cast<dpnNoiseVarOp<ScalarT> > (thisAst_);
+      visitor.visit( castToThis ); 
+    } // 2nd dispatch
+
+  private:
+    ScalarT number_;
+    std::vector<std::string> noiseDevices_;
+    int derivIndex_;
+};
+
+template <typename ScalarT>
+class amNoiseOp: public astNode<ScalarT>
+{
+  public:
+    amNoiseOp (): astNode<ScalarT>(), number_(0.0), derivIndex_(-1) {};
+    virtual ScalarT val() {return number_;}
+    virtual ScalarT dx(int i) { return (derivIndex_==i)?1.0:0.0; }
+    virtual void dx2(ScalarT & result, std::vector<ScalarT> & derivs, int numDerivs)
+    {
+      result = number_;
+      if ( !(derivs.empty() ) )
+      {
+        std::fill(derivs.begin(),derivs.end(),0.0);
+        if (derivIndex_>-1) derivs[derivIndex_] = 1.0;
+      }
+    }
+
+    virtual bool getIsComplex () { return false; }
+
+    virtual void generateExpressionString (std::string & str)
+    {
+      str = "AMNOISE";
+    }
+
+    virtual void output(std::ostream & os, int indent=0)
+    {
+      os << std::setw(indent) << " ";
+      os << "amnoise variable id = " << this->id_ << std::endl;
+      os << std::setw(indent) << " " << "value = " << val() <<std::endl;
+    }
+
+    virtual void compactOutput(std::ostream & os)
+    {
+      os << "amnoise variable id = " << this->id_ << std::endl;
+    }
+
+    virtual void codeGen (std::ostream & os ) { os << "AMNOISE"; }
+
+    virtual void setDerivIndex(int i) {derivIndex_=i;};
+    virtual void unsetDerivIndex() {derivIndex_=-1;};
+    ScalarT & getNoiseVar () { return number_; }
+    void setNoiseVar (ScalarT n) { number_ = n; }
+    virtual bool getIsTreeConstant() { return false; }
+    virtual bool amNoiseType()  { return true; };
+
+    virtual void accept (nodeVisitor<ScalarT> & visitor, Teuchos::RCP<astNode<ScalarT> > & thisAst_)
+    { 
+      Teuchos::RCP<amNoiseOp<ScalarT> > castToThis = Teuchos::rcp_static_cast<amNoiseOp<ScalarT> > (thisAst_);
+      visitor.visit( castToThis ); 
+    } // 2nd dispatch
+
+  private:
+    ScalarT number_;
+    int derivIndex_;
+};
+
+template <typename ScalarT>
+class pmNoiseOp: public astNode<ScalarT>
+{
+  public:
+    pmNoiseOp (): astNode<ScalarT>(), number_(0.0), derivIndex_(-1) {};
+    virtual ScalarT val() {return number_;}
+    virtual ScalarT dx(int i) { return (derivIndex_==i)?1.0:0.0; }
+    virtual void dx2(ScalarT & result, std::vector<ScalarT> & derivs, int numDerivs)
+    {
+      result = number_;
+      if ( !(derivs.empty() ) )
+      {
+        std::fill(derivs.begin(),derivs.end(),0.0);
+        if (derivIndex_>-1) derivs[derivIndex_] = 1.0;
+      }
+    }
+
+    virtual bool getIsComplex () { return false; }
+
+    virtual void generateExpressionString (std::string & str)
+    {
+      str = "PMNOISE";
+    }
+
+    virtual void output(std::ostream & os, int indent=0)
+    {
+      os << std::setw(indent) << " ";
+      os << "pmnoise variable id = " << this->id_ << std::endl;
+      os << std::setw(indent) << " " << "value = " << val() <<std::endl;
+    }
+
+    virtual void compactOutput(std::ostream & os)
+    {
+      os << "pmnoise variable id = " << this->id_ << std::endl;
+    }
+
+    virtual void codeGen (std::ostream & os ) { os << "PMNOISE"; }
+
+    virtual void setDerivIndex(int i) {derivIndex_=i;};
+    virtual void unsetDerivIndex() {derivIndex_=-1;};
+    ScalarT & getNoiseVar () { return number_; }
+    void setNoiseVar (ScalarT n) { number_ = n; }
+    virtual bool getIsTreeConstant() { return false; }
+    virtual bool pmNoiseType()  { return true; };
+
+    virtual void accept (nodeVisitor<ScalarT> & visitor, Teuchos::RCP<astNode<ScalarT> > & thisAst_)
+    { 
+      Teuchos::RCP<pmNoiseOp<ScalarT> > castToThis = Teuchos::rcp_static_cast<pmNoiseOp<ScalarT> > (thisAst_);
+      visitor.visit( castToThis ); 
+    } // 2nd dispatch
+
+  private:
+    ScalarT number_;
+    int derivIndex_;
+};
+//-------------------------------------------------------------------------------
 
 //-------------------------------------------------------------------------------
 // This class represents the invocation of a .FUNC (function).  It represents a

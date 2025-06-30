@@ -596,6 +596,8 @@ void createCurrentOp(
 %token <std::string *> TOK_LEAD "lead"
 %token <std::string *> TOK_ONOISE "onoise"
 %token <std::string *> TOK_INOISE "inoise"
+%token <std::string *> TOK_AMNOISE "amnoise"
+%token <std::string *> TOK_PMNOISE "pmnoise"
 %token <std::string *> TOK_POWER "power"
 %token <std::string *> TOK_VOLTAGE "voltage"
 %token <std::string *> TOK_VOLTAGENODE "voltagenode"
@@ -1181,6 +1183,20 @@ exp:
       Teuchos::RCP<iNoiseOp<usedType> > inoisePtr = Teuchos::RCP<iNoiseOp<usedType> >(new iNoiseOp<usedType>());
       $$ = Teuchos::RCP<astNode<usedType> >(inoisePtr);
       newExp.getINoiseOpVec().push_back(inoisePtr);
+      delete $1;
+    }
+  | TOK_AMNOISE
+    {
+      Teuchos::RCP<amNoiseOp<usedType> > amnoisePtr = Teuchos::RCP<amNoiseOp<usedType> >(new amNoiseOp<usedType>());
+      $$ = Teuchos::RCP<astNode<usedType> >(amnoisePtr);
+      newExp.getAMNoiseOpVec().push_back(amnoisePtr);
+      delete $1;
+    }
+  | TOK_PMNOISE
+    {
+      Teuchos::RCP<pmNoiseOp<usedType> > pmnoisePtr = Teuchos::RCP<pmNoiseOp<usedType> >(new pmNoiseOp<usedType>());
+      $$ = Teuchos::RCP<astNode<usedType> >(pmnoisePtr);
+      newExp.getPMNoiseOpVec().push_back(pmnoisePtr);
       delete $1;
     }
   | TOK_MAX  exp TOK_COMMA exp TOK_RIGHTPAREN

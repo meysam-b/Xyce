@@ -213,6 +213,34 @@ bool baseExpressionGroup::putValues(newExpression & expr)
     }
   }
 
+  if ( !(expr.amNoiseOpVec_.empty()) )
+  {
+    for (int ii=0;ii<expr.amNoiseOpVec_.size();ii++)
+    {
+      Teuchos::RCP<amNoiseOp<usedType> > amnoiseOp = Teuchos::rcp_static_cast<amNoiseOp<usedType> > (expr.amNoiseOpVec_[ii]);
+      usedType val=0.0;
+      usedType oldval=amnoiseOp->val();
+      getAMNoise(val);
+      amnoiseOp->setNoiseVar ( val );
+
+      if (val != oldval) noChange = false;
+    }
+  }
+
+  if ( !(expr.pmNoiseOpVec_.empty()) )
+  {
+    for (int ii=0;ii<expr.pmNoiseOpVec_.size();ii++)
+    {
+      Teuchos::RCP<pmNoiseOp<usedType> > pmnoiseOp = Teuchos::rcp_static_cast<pmNoiseOp<usedType> > (expr.pmNoiseOpVec_[ii]);
+      usedType val=0.0;
+      usedType oldval=pmnoiseOp->val();
+      getPMNoise(val);
+      pmnoiseOp->setNoiseVar ( val );
+
+      if (val != oldval) noChange = false;
+    }
+  }
+
   if ( !(expr.powerOpVec_.empty()) )
   {
     for (int ii=0;ii<expr.powerOpVec_.size();ii++)

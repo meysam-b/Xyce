@@ -140,6 +140,12 @@ public:
   virtual bool getINoise(double & retval);
   virtual bool getINoise(std::complex<double> & retval);
 
+  virtual bool getAMNoise(double & retval);
+  virtual bool getAMNoise(std::complex<double> & retval);
+
+  virtual bool getPMNoise(double & retval);
+  virtual bool getPMNoise(std::complex<double> & retval);
+
   virtual bool getPower(const std::string & tag, const std::string & deviceName, double & retval);
   virtual bool getPower(const std::string & tag, const std::string & deviceName, std::complex<double> & retval);
 
@@ -202,6 +208,10 @@ private:
   Op::OpList dniNoiseDevVarOps_;
   Op::OpList oNoiseOps_;
   Op::OpList iNoiseOps_;
+  Op::OpList danNoiseDevVarOps_;
+  Op::OpList dpnNoiseDevVarOps_;
+  Op::OpList amNoiseOps_;
+  Op::OpList pmNoiseOps_;
   Op::OpList powerOps_;
   Op::OpList sparamOps_;
   Op::OpList yparamOps_;

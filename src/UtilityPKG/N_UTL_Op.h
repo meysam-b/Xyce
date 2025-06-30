@@ -260,12 +260,10 @@ struct OpData
     // Meysam Bahmanian
     // 6/10/2025
     // enabling these lines requires changing all of the existing instantiations of OpData using this constructor.
-    // double                              amnoise = 0.0,
-    // double                              pmnoise = 0.0,
-    // const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVec = 0,
-    // const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec = 0,
-    // const std::vector<std::vector<Xyce::Analysis::NoiseData*> > * amnoiseDataVecVec = 0,
-    // const std::vector<std::vector<Xyce::Analysis::NoiseData*> > * pmnoiseDataVecVec = 0,
+    double                              amnoise = 0.0,
+    double                              pmnoise = 0.0,
+    const std::vector<Xyce::Analysis::NoiseData*> * amnoiseDataVec = 0,
+    const std::vector<Xyce::Analysis::NoiseData*> * pmnoiseDataVec = 0,
     const RFparamsData * RFparams = 0
     )
   : currentIndex_(current_index),
@@ -286,12 +284,10 @@ struct OpData
     onoise_(onoise),
     inoise_(inoise),
     noiseDataVec_(noiseDataVec),
-    // amnoise_(amnoise),
-    // pmnoise_(pmnoise),
-    // amnoiseDataVec_(amnoiseDataVec),
-    // pmnoiseDataVec_(pmnoiseDataVec),
-    // amnoiseDataVecVec_(amnoiseDataVecVec),
-    // pmnoiseDataVecVec_(pmnoiseDataVecVec),
+    amnoise_(amnoise),
+    pmnoise_(pmnoise),
+    amnoiseDataVec_(amnoiseDataVec),
+    pmnoiseDataVec_(pmnoiseDataVec),
     RFparams_(RFparams)
   {}
 
