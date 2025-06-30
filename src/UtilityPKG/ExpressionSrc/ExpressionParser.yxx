@@ -1167,6 +1167,18 @@ exp:
         $$ = Teuchos::RCP<astNode<usedType> >(dniNoiseVarPtr);
         newExp.getDniNoiseDevVarOpVec().push_back(dniNoiseVarPtr);
       }
+      else if ( firstArg == std::string("DAN") )
+      {
+        Teuchos::RCP<danNoiseVarOp<usedType> > danNoiseVarPtr = Teuchos::RCP<danNoiseVarOp<usedType> >(new danNoiseVarOp<usedType>(*$2));
+        $$ = Teuchos::RCP<astNode<usedType> >(danNoiseVarPtr);
+        newExp.getDanNoiseDevVarOpVec().push_back(danNoiseVarPtr);
+      }
+      else if ( firstArg == std::string("DPN") )
+      {
+        Teuchos::RCP<dpnNoiseVarOp<usedType> > dpnNoiseVarPtr = Teuchos::RCP<dpnNoiseVarOp<usedType> >(new dpnNoiseVarOp<usedType>(*$2));
+        $$ = Teuchos::RCP<astNode<usedType> >(dpnNoiseVarPtr);
+        newExp.getDpnNoiseDevVarOpVec().push_back(dpnNoiseVarPtr);
+      }
 
       delete $1;
       delete $2;

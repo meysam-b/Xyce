@@ -115,6 +115,10 @@ void outputsXyceExpressionGroup::clearOps()
   for (Util::Op::OpList::const_iterator it = dniNoiseDevVarOps_.begin(); it != dniNoiseDevVarOps_.end(); ++it) { delete *it; }
   for (Util::Op::OpList::const_iterator it = oNoiseOps_.begin(); it != oNoiseOps_.end(); ++it) { delete *it; }
   for (Util::Op::OpList::const_iterator it = iNoiseOps_.begin(); it != iNoiseOps_.end(); ++it) { delete *it; }
+  for (Util::Op::OpList::const_iterator it = danNoiseDevVarOps_.begin(); it != danNoiseDevVarOps_.end(); ++it) { delete *it; }
+  for (Util::Op::OpList::const_iterator it = dpnNoiseDevVarOps_.begin(); it != dpnNoiseDevVarOps_.end(); ++it) { delete *it; }
+  for (Util::Op::OpList::const_iterator it = amNoiseOps_.begin(); it != amNoiseOps_.end(); ++it) { delete *it; }
+  for (Util::Op::OpList::const_iterator it = pmNoiseOps_.begin(); it != pmNoiseOps_.end(); ++it) { delete *it; }
   for (Util::Op::OpList::const_iterator it = powerOps_.begin(); it != powerOps_.end(); ++it) { delete *it; }
   for (Util::Op::OpList::const_iterator it = sparamOps_.begin(); it != sparamOps_.end(); ++it) { delete *it; }
   for (Util::Op::OpList::const_iterator it = yparamOps_.begin(); it != yparamOps_.end(); ++it) { delete *it; }
@@ -128,6 +132,10 @@ void outputsXyceExpressionGroup::clearOps()
   dniNoiseDevVarOps_.clear();
   oNoiseOps_.clear();
   iNoiseOps_.clear();
+  danNoiseDevVarOps_.clear();
+  dpnNoiseDevVarOps_.clear();
+  amNoiseOps_.clear();
+  pmNoiseOps_.clear();
   powerOps_.clear();
   sparamOps_.clear();
   yparamOps_.clear();
@@ -268,6 +276,34 @@ bool outputsXyceExpressionGroup::setupGroup(newExpression &expr)
       paramList.push_back(Param(std::string("INOISE"),0.0));
     }
     Util::Op::makeOps(comm_.comm(), op_builder_manager, NetlistLocation(), paramList.begin(), paramList.end(), std::back_inserter(iNoiseOps_));
+  }
+
+  if ( !(expr.danNoiseDevVarOpVec_.empty()) )
+  {
+    ParamList paramList;
+    for (int ii=0;ii<expr.danNoiseDevVarOpVec_.size();ii++)
+    {
+      Teuchos::RCP<danNoiseVarOp<usedType> > danOp = Teuchos::rcp_static_cast<danNoiseVarOp<usedType> > (expr.danNoiseDevVarOpVec_[ii]);
+
+      const std::vector<std::string> & deviceNames = danOp->getNoiseDevices();
+      paramList.push_back(Param(std::string("DAN"), static_cast<int>(deviceNames.size())));
+      for(int ii=0;ii<deviceNames.size();ii++) { paramList.push_back(Param(deviceNames[ii],0.0)); }
+    }
+    Util::Op::makeOps(comm_.comm(), op_builder_manager, NetlistLocation(), paramList.begin(), paramList.end(), std::back_inserter(danNoiseDevVarOps_));
+  }
+
+  if ( !(expr.dpnNoiseDevVarOpVec_.empty()) )
+  {
+    ParamList paramList;
+    for (int ii=0;ii<expr.dpnNoiseDevVarOpVec_.size();ii++)
+    {
+      Teuchos::RCP<dpnNoiseVarOp<usedType> > dpnOp = Teuchos::rcp_static_cast<dpnNoiseVarOp<usedType> > (expr.dpnNoiseDevVarOpVec_[ii]);
+
+      const std::vector<std::string> & deviceNames = dpnOp->getNoiseDevices();
+      paramList.push_back(Param(std::string("DPN"), static_cast<int>(deviceNames.size())));
+      for(int ii=0;ii<deviceNames.size();ii++) { paramList.push_back(Param(deviceNames[ii],0.0)); }
+    }
+    Util::Op::makeOps(comm_.comm(), op_builder_manager, NetlistLocation(), paramList.begin(), paramList.end(), std::back_inserter(dpnNoiseDevVarOps_));
   }
 
   if ( !(expr.amNoiseOpVec_.empty()) )
@@ -495,6 +531,32 @@ bool outputsXyceExpressionGroup::putValues(newExpression & expr)
     {
       Teuchos::RCP<iNoiseOp<usedType> > inoiseOp = Teuchos::rcp_static_cast<iNoiseOp<usedType> > (expr.iNoiseOpVec_[ii]);
       usedType & val=inoiseOp->getNoiseVar();
+      usedType oldval=val;
+      val = Util::Op::getValue(comm_.comm(), *(*it), opData_);
+      if (val != oldval) noChange = false;
+    }
+  }
+
+  if ( !(expr.danNoiseDevVarOpVec_.empty()) )
+  {
+    Util::Op::OpList::const_iterator it = danNoiseDevVarOps_.begin();
+    for (int ii=0;ii<expr.danNoiseDevVarOpVec_.size();ii++,++it)
+    {
+      Teuchos::RCP<danNoiseVarOp<usedType> > danOp = Teuchos::rcp_static_cast<danNoiseVarOp<usedType> > (expr.danNoiseDevVarOpVec_[ii]);
+      usedType & val=danOp->getNoiseVar ();
+      usedType oldval=val;
+      val = Util::Op::getValue(comm_.comm(), *(*it), opData_);
+      if (val != oldval) noChange = false;
+    }
+  }
+
+  if ( !(expr.dpnNoiseDevVarOpVec_.empty()) )
+  {
+    Util::Op::OpList::const_iterator it = dpnNoiseDevVarOps_.begin();
+    for (int ii=0;ii<expr.dpnNoiseDevVarOpVec_.size();ii++,++it)
+    {
+      Teuchos::RCP<dpnNoiseVarOp<usedType> > dpnOp = Teuchos::rcp_static_cast<dpnNoiseVarOp<usedType> > (expr.dpnNoiseDevVarOpVec_[ii]);
+      usedType & val=dpnOp->getNoiseVar ();
       usedType oldval=val;
       val = Util::Op::getValue(comm_.comm(), *(*it), opData_);
       if (val != oldval) noChange = false;
